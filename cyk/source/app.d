@@ -2,135 +2,7 @@ module app;
 
 import cyk;
 import std.stdio;
-import pegged.grammar;
-
-mixin(grammar(`
-NormalizedGrammar:
-	Line		    <  Rules / Comment
-	Rules 	        <  NonTerminal "->" ProductionList
-	Comment		    <- "//" ~(.*)
-	ProductionList  <  Production ("|" Production)*
-	NonTerminal     <- ~([A-Z][A-Z_0-9]*)
-	Production      <  (NonTerminal NonTerminal) / Terminal
-	Terminal        <- ~([a-z!@#$%^&*()]+)
-`));
-
-import std.typecons : Nullable, nullable;
-struct Line
-{
-    enum Kind
-    {
-        Rules,
-        Comment,
-    }
-
-    Kind _kind;
-    ParseTree _node;
-
-    static Nullable!Line create(ParseTree node)
-    {
-        enum null_ = typeof(return).init;
-        if (node.children.length != 1)
-            return null_;
-        
-        auto or = node.children[0];
-        if (or.children.length != 1)
-            return null_;
-        
-        Line line;
-        line._node = node;
-        switch (or.children[0].name)
-        {
-            case "NormalizedGrammar.Rules":
-            {
-                line._kind = Kind.Rules;
-                break;
-            }
-            case "NormalizedGrammar.Comment":
-            {
-                line._kind = Kind.Comment;
-                break;
-            }
-            default:
-            {
-                return null_;
-            }
-        }
-
-        return nullable(line);
-    }
-
-    Rules rules()
-    {
-        auto or = _node.children[0];
-        switch (_kind)
-        {
-            case Kind.Rules:
-                return Rules.create(or.children[0]).get();
-            default:
-                return typeof(return).init;
-        }
-    }
-
-    Comment comment()
-    {
-        auto or = _node.children[0];
-        switch (_kind)
-        {
-            case Kind.Comment:
-                return Comment.create(or.children[0]).get();
-            default:
-                return typeof(return).init;
-        }
-    }
-}
-
-struct Rules
-{
-    ParseTree _node;
-
-    static Nullable!Rules create(ParseTree node)
-    {
-        enum null_ = typeof(return).init;
-
-        if (node.children.length != 1)
-            return null_;
-
-        auto and = node.children[0];
-        if (and.children.length != 3)
-            return null_;
-
-        return nullable(Rules(node));
-    }
-
-    string nonTerminal()
-    {
-        return _node.children[0].children[0].matches[0];
-    }
-
-    ProductionList productionList()
-    {
-        return ProductionList.create(_node.children[0].children[2]).get();
-    }
-}
-
-struct ProductionList
-{
-    static Nullable!ProductionList create(ParseTree node)
-    {
-        return typeof(return).init;
-    }
-}
-
-
-struct Comment
-{
-    static Nullable!Comment create(ParseTree node)
-    {
-        return typeof(return).init;
-    }
-}
-
+import grammar_grammar;
 
 int main(string[] args)
 {
@@ -153,7 +25,6 @@ int main(string[] args)
         
         size_t result = terminalsMap.length;
         terminalsMap[name] = result;
-        writeln("Adding terminal ", name);
         return result;
     }
 
@@ -165,7 +36,6 @@ int main(string[] args)
         size_t result = symbolMap.length;
         symbolMap[name] = result;
         productions.length = result + 1;
-        writeln("Added symbol ", name);
         return result;
     }
     
@@ -184,7 +54,6 @@ int main(string[] args)
 			continue;
 
 		auto parsedLine = NormalizedGrammar.Line(line);
-
         if (!parsedLine.successful)
         {
             writeln("Bad syntax on line ", lineIndex);
@@ -194,69 +63,33 @@ int main(string[] args)
             continue;
         }
 
-		foreach (child; parsedLine.children[0])
-		{
-            switch (child.name)
+        auto maybeRules = Line(parsedLine).rules;
+        if (maybeRules.isNull)
+            continue;
+        auto rules = maybeRules.get();
+
+        size_t ntIndex = addOrGetNonTerminal(rules.nonTerminal);
+
+        foreach (prod; rules.productionList[])
+        {
+            auto terminal = prod.terminal;
+            if (!terminal.isNull)
             {
-                case "NormalizedGrammar.Rules":
-                {
-                    // name
-                    // successful
-                    // matches
-                    // input
-                    // begin
-                    // end
-                    // children
-                    // failEnd
-                    // failedChild
-                    // toString
-                    // toStringThisNode
-                    // failMsg
-
-                    auto rules = child.children[0];
-                    auto nonTerminal = rules.children[0].children[0];
-
-                    string nonTerminalName = nonTerminal.matches[0];
-                    size_t ntIndex = addOrGetNonTerminal(nonTerminalName);
-
-                    void process(ParseTree prod)
-                    {
-                        auto symbols = prod.children[0].children[0].children;
-
-                        // terminal
-                        if (symbols.length == 1)
-                        {
-                            auto tindex = addOrGetTerminal(symbols[0].matches[0]);
-                            productions[ntIndex] ~= Production(tindex);
-                        }
-
-                        // non-terminal
-                        else
-                        {
-                            auto nt0 = addOrGetNonTerminal(symbols[0].matches[0]);
-                            auto nt1 = addOrGetNonTerminal(symbols[1].matches[0]);
-                            productions[ntIndex] ~= Production([nt0, nt1]);
-                        }
-                    }
-                    
-                    auto prodList = rules.children[2].children[0].children;
-                    process(prodList[0]);
-
-                    // (| other)*
-                    auto others = prodList[1].children;
-                    foreach (prod; iota(0, others.length, 2).map!(i => others[i].children[1]))
-                        process(prod);
-
-                    break;
-                }
-
-                case "NormalizedGrammar.Comment":
-                    break;
-                
-                default:
-                    assert(0);
+                auto tindex = addOrGetTerminal(terminal.get());
+                productions[ntIndex] ~= Production(tindex);
+                continue;
             }
-		}
+
+            auto nonTerminal2 = prod.nonTerminal2;
+            if (!nonTerminal2.isNull)
+            {
+                auto nts = nonTerminal2.get();
+                auto nt0 = addOrGetNonTerminal(nts[0]);
+                auto nt1 = addOrGetNonTerminal(nts[1]);
+                productions[ntIndex] ~= Production([nt0, nt1]);
+                continue;
+            }
+        }
 	}
 
     if (badInput)
@@ -273,6 +106,8 @@ int main(string[] args)
         terminals[index] = name;
 
     Grammar grammar = Grammar(productions, terminals, nonTerminalNames);
+    
+    writeln("Terminals: ", terminals.join(','));
 
     {
         import std.stdio;
@@ -280,7 +115,7 @@ int main(string[] args)
         
         while (true)
         {
-            write("Enter word (q to quit): ");
+            write("Enter a word (q to quit): ");
             string input = readln().strip;
             if (input == "q")
                 return 0;
