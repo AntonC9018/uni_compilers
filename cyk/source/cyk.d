@@ -22,6 +22,7 @@ import mir.ndslice;
 
 struct Derivation
 {
+    const(size_t)[] tokenizedInput;
     Slice!(bool*, 3) P;
     Slice!(Triple[]*, 3) back;
     bool isPartOfLanguage() const { return P[$ - 1, 0, 0]; }
@@ -53,8 +54,9 @@ Nullable!(size_t[]) tokenizeInput(const(string)[] terminals, string input)
 
         if (!matched)
         {
+            import std.algorithm;
             writeln("Bad input around ", input[0 .. index],
-                ". Expected one of ", terminals, " got ", input[index .. $]);
+                ". Expected one of ", terminals.join(','), " got ", input[index .. $]);
             return typeof(return).init;
         }
     }
@@ -138,7 +140,7 @@ Derivation getDerivation(const typeof(Grammar.productions) productions, const(si
     //     return back -- by retracing the steps through back, one can easily construct all possible parse trees of the string.
     // else
     //     return "not a member of language"
-    return Derivation(P, back);
+    return Derivation(tokenizedInput, P, back);
 }
 
 
@@ -148,10 +150,14 @@ void writeDerivation(Grammar grammar, in Derivation d)
     import std.range;
 
     string[][] things = new string[][d.P.length + 1];
-    int maxLength = int.min;
+    size_t maxLength = size_t.min;
 
+    things[0].length = d.tokenizedInput.length;
     foreach (tokenIndex, ref token; things[0])
-        token = grammar.terminals[tokenIndex];
+    {
+        token = grammar.terminals[d.tokenizedInput[tokenIndex]];
+        maxLength = max(maxLength, token.length);
+    }
 
     foreach (rowIndex, ref row; things[1 .. $])
     {
@@ -168,7 +174,7 @@ void writeDerivation(Grammar grammar, in Derivation d)
                     cell ~= grammar.symbolNames[i];
                 }
             }
-            maxLength = max(maxLength, cast(int) cell.length);
+            maxLength = max(maxLength, cell.length);
         }
     }
 
