@@ -3,18 +3,19 @@ module cyk;
 import std.stdio;
 import std.sumtype;
 
-alias Production = SumType!(int[2], char);
+alias Production = SumType!(size_t[2], size_t);
 
 // let the grammar contain r nonterminal symbols R1 ... Rr, with start symbol R1.
 static struct Grammar
 {
     Production[][] productions;
+    string[] terminals;
     string[] symbolNames;
 }
 
 struct Triple
 {
-    int[3] indices;
+    size_t[3] indices;
 }
 
 import mir.ndslice;
@@ -26,10 +27,44 @@ struct Derivation
     bool isPartOfLanguage() const { return P[$ - 1, 0, 0]; }
 }
 
-Derivation getDerivation(Grammar grammar, string input)
+import std.typecons : Nullable, nullable;
+
+Nullable!(size_t[]) tokenizeInput(const(string)[] terminals, string input)
 {
-    int n = cast(int) input.length;
-    int r = cast(int) grammar.productions.length;
+    import std.range;
+    import std.string;
+
+    auto tokens = appender!(size_t[]);
+    int index = 0;
+
+    while (index < input.length)
+    {
+        bool matched = false;
+        foreach (tindex, terminal; terminals)
+        {
+            if (input[index .. $].startsWith(terminal))
+            {
+                tokens ~= tindex;
+                index += terminal.length;
+                matched = true;
+                break;
+            }
+        }
+
+        if (!matched)
+        {
+            writeln("Bad input around ", input[0 .. index],
+                ". Expected one of ", terminals, " got ", input[index .. $]);
+            return typeof(return).init;
+        }
+    }
+    return nullable(tokens[]);
+}
+
+Derivation getDerivation(const typeof(Grammar.productions) productions, const(size_t)[] tokenizedInput)
+{
+    int n = cast(int) tokenizedInput.length;
+    int r = cast(int) productions.length;
 
     // let P[n,n,r] be an array of booleans. Initialize all elements of P to false.
     auto P = slice!bool(n, n, r);
@@ -41,14 +76,14 @@ Derivation getDerivation(Grammar grammar, string input)
     // for each s = 1 to n
     //     for each unit production Rv → as
     //         set P[1,s,v] = true
-    foreach (s, char inputChar; input)
+    foreach (s, size_t token; tokenizedInput)
     {
-        foreach (v, Production[] productions; grammar.productions)
+        foreach (v, const(Production)[] prods; productions)
         {
-            foreach (Production p; productions)
+            foreach (Production p; prods)
             {
                 if (p.match!(
-                    (char c) => inputChar == c,
+                    (size_t outToken) => token == outToken,
                     _ => false
                 ))
                 {
@@ -75,12 +110,12 @@ Derivation getDerivation(Grammar grammar, string input)
             // all previous rows
             foreach (prevRowIndex; 0 .. rowIndex)
             {
-                foreach (nonTerminalSymbolIndex, Production[] productions; grammar.productions)
+                foreach (nonTerminalSymbolIndex, const(Production)[] prods; productions)
                 {
-                    foreach (Production production; productions)
+                    foreach (Production prod; prods)
                     {
-                        production.match!(
-                            (int[2] indices)
+                        prod.match!(
+                            (size_t[2] indices)
                             {
                                 bool aboveSet = P[prevRowIndex, colIndex, indices[0]];
                                 bool diagonalSet = P[rowIndex - prevRowIndex - 1, colIndex + prevRowIndex + 1, indices[1]];
@@ -112,9 +147,13 @@ void writeDerivation(Grammar grammar, in Derivation d)
     import std.algorithm;
     import std.range;
 
-    string[][] things = new string[][d.P.length];
+    string[][] things = new string[][d.P.length + 1];
     int maxLength = int.min;
-    foreach (rowIndex, ref row; things)
+
+    foreach (tokenIndex, ref token; things[0])
+        token = grammar.terminals[tokenIndex];
+
+    foreach (rowIndex, ref row; things[1 .. $])
     {
         row.length = d.P.length - rowIndex;
 
