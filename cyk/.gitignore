@@ -1,0 +1,15 @@
+.dub
+docs.json
+__dummy.html
+docs/
+/cyk
+cyk.so
+cyk.dylib
+cyk.dll
+cyk.a
+cyk.lib
+cyk-test-*
+*.exe
+*.o
+*.obj
+*.lst

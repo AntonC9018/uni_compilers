@@ -1,0 +1,7 @@
+{
+	"fileVersion": 1,
+	"versions": {
+		"mir-algorithm": "2.0.6",
+		"pegged": "0.4.6"
+	}
+}

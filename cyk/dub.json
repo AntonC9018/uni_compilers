@@ -1,0 +1,14 @@
+{
+	"authors": [
+		"Anton"
+	],
+	"dependencies":
+	{
+		"pegged": "~>0.4.6",
+		"mir-algorithm": "~>2.0.0"
+	},
+	"copyright": "Copyright © 2022, Anton",
+	"description": "A minimal D application.",
+	"license": "proprietary",
+	"name": "cyk"
+}

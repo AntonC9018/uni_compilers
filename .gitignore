@@ -1,3 +1,7 @@
 *.html
 *.pdf
 !template.html
+ignore_cyk.d
+
+*.ilk
+*.pdb
