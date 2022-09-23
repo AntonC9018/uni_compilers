@@ -10,7 +10,7 @@ NormalizedGrammar:
 	ProductionList  <  Production ("|" Production)*
 	NonTerminal     <- ~([A-Z][A-Z_0-9]*)
 	Production      <  (NonTerminal NonTerminal) / Terminal
-	Terminal        <- ~(.+)
+	Terminal        <- ~((!("|") .)+)
 `));
 
 import std.typecons : Nullable, nullable, tuple, Tuple;

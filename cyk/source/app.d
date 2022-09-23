@@ -54,6 +54,13 @@ int main(string[] args)
 			continue;
 
 		auto parsedLine = NormalizedGrammar.Line(line);
+        if (parsedLine.end != line.length)
+        {
+            writeln("Did not parse the whole line, okay until ", line[parsedLine.end .. $],
+                " (position ", parsedLine.end, ")");
+            badInput = true;
+            continue;
+        }
         if (!parsedLine.successful)
         {
             writeln("Bad syntax on line ", lineIndex);
