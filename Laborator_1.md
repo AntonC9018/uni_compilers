@@ -169,58 +169,104 @@ Z_4 \rightarrow X_{minus} T \\\\
 \end{cases}
 $
 
+## Aducerea la forma Greibach
 
+Începem cu gramatica din pasul normalizării:
 
-## Aducerea la formă Greibach
-
-1. Se redenumesc toate elementele neterminale.
-
-$
-E \rightarrow A_1 \\\\
-T \rightarrow A_2 \\\\
-F \rightarrow A_3 \\\\
-H \rightarrow A_4 \\\\
-X_m \rightarrow A_5 \\\\
-X_n \rightarrow A_6 \\\\
-X_{mul} \rightarrow A_7 \\\\
-X_{div} \rightarrow A_8 \\\\
-X_{plus} \rightarrow A_9 \\\\
-X_{minus} \rightarrow A_{10} \\\\
-X_h \rightarrow A_{11} \\\\
-Z_1 \rightarrow A_{12} \\\\
-Z_2 \rightarrow A_{13} \\\\
-Z_3 \rightarrow A_{14} \\\\
-Z_4 \rightarrow A_{15} \\\\
-$
-
-$ P ^ G _ 1 =
+$ G = (\{E, T, F, H\}, \{+, -, *, /, n, m, h\}, P, E) \\\\
+P _ G =
 \begin{cases}
-A_1 \rightarrow A_4 A_5 | A_3 A_6 | n | A_3 A_{12} | A_3 A_{13} | A_7 A_2 | A_3 A_7 | A_8 A_2 | A_3 A_8 | A_1 A_{14} | A_1 A_{15} | m | A_9 A_2 | A_1 A_9 | A_{10} A_2 | A_1 A_{10} | \varepsilon \\\\
-A_2 \rightarrow A_4 A_5 | A_3 A_6 | n | A_3 A_{12} | A_3 A_{13} | A_7 A_2 | A_3 A_7 | A_8 A_2 | A_3 A_8 \\\\
-A_3 \rightarrow A_4 A_5 | A_3 A_6 | n \\\\
-A_4 \rightarrow A_4 A_{11} | h \\\\
-A_5 \rightarrow m   \\\\
-A_6 \rightarrow n   \\\\
-A_7 \rightarrow \*   \\\\
-A_8 \rightarrow /     \\\\
-A_9 \rightarrow +     \\\\
-A_{10} \rightarrow -     \\\\
-A_{11} \rightarrow h   \\\\
-A_{12} \rightarrow A_7 A_2 \\\\
-A_{13} \rightarrow A_8 A_2 \\\\
-A_{14} \rightarrow A_9 A_2 \\\\
-A_{15} \rightarrow A_{10} A_2 \\\\
+E \rightarrow Hm | Fn | n | F \* T | F / T | \*T | F\* | /T | F/ | E + T | E - T | m | +T | E+ | -T | E- | \varepsilon \\\\
+T \rightarrow Hm | Fn | n | F \* T | F / T | \*T | F\* | /T | F/ \\\\
+F \rightarrow Hm | Fn | n \\\\
+H \rightarrow Hh | h \\\\
 \end{cases}
-$ 
+$
 
-2. Se modifică mulțimea de producții $ P^G_1$ astfel încât toate producțiile de tip $ A_i \rightarrow A_j \beta $ să satisfacă condiția $ j > i $.
-    1. Dacă există $ A_i \rightarrow A_k \delta $ pentru care $ k < i $ se substituie cu $ A_i \rightarrow A_l \delta, A_k \rightarrow A_l $.
-    2. Dacă există $ A_i \rightarrow A_i \beta $ (recursie de stângă) se elimină recursia stângă.
+Performăm substituirile:
+
+$ E \rightarrow A_0 \\\\
+T \rightarrow A_1 \\\\
+F \rightarrow A_2 \\\\
+H \rightarrow A_3
+$
 
 
-$ A_1 \rightarrow A_1 A_{14} $. $ 1 \ngtr 1 $, de aceea o înlocuim la 
-$ A_1 \rightarrow A_{16} A_{14}; $
-$ A_{16} \rightarrow A_1 $.
+$ P _ G ^ {1 \prime} =
+\begin{cases}
+A_0 \rightarrow A_3 m | A_2 n | n | A_2 \* A_1 | A_2 / A_1 | \*A_1 | A_2\* | /A_1 | A_2/ | A_0 + A_1 | A_0 - A_1 | m | +A_1 | A_0+ | -A_1 | A_0- | \varepsilon \\\\
+A_1 \rightarrow A_3 m | A_2 n | n | A_2 \* A_1 | A_2 / A_1 | \*A_1 | A_2\* | /A_1 | A_2/ \\\\
+A_2 \rightarrow A_3 m | A_2 n | n \\\\
+A_3 \rightarrow A_3 h | h \\\\
+\end{cases}
+$
 
-?????
+> 1. Se elimină recursia stângă.
+
+Avem 4 instanțe de recursie stângă pentru 4 reguli ai neterminalululi $ A_0 $: $ A_0 \rightarrow A_0 + A_1 | A_0 - A_1 | A_0 + | A_0 - $.
+
+Ca să elimine recursia stângă, se adaugă o regulă $ X_0 \rightarrow + A_1 | + A_1 X_0 | - A_1 | - A_1 X_0 | + | + X_0 | - | - X_0 $, și se adaugă regulile modifice $ A $ la $ A_0 \rightarrow A_3 m X_0 | A_2 n X_0 | n X_0 | A_2 \* A_1 X_0 | A_2 / A_1 X_0 | \* A_1 X_0 | A_2 \* X_0 | /A_1 X_0 | A_2/ X_0 | m X_0 | + A_1 X_0| - A_1 X_0 | X_0 $ și se elimine toate regulile recursive.
+
+
+$ P _ 1 ^ {\prime} =
+\begin{cases}
+A_0 \rightarrow A_3 m | A_2 n | n | A_2 \* A_1 | A_2 / A_1 | \*A_1 | A_2\* | /A_1 | A_2/ | m | +A_1 | -A_1 | \varepsilon \\\\
+A_0 \rightarrow A_3 m X_0 | A_2 n X_0 | n X_0 | A_2 \* A_1 X_0 | A_2 / A_1 X_0 | \* A_1 X_0 | A_2 \* X_0 | /A_1 X_0 | A_2/ X_0 | m X_0 | + A_1 X_0| - A_1 X_0 | X_0  \\\\
+X_0 \rightarrow + A_1 | + A_1 X_0 | - A_1 | - A_1 X_0 | + | + X_0 | - | - X_0 \\\\
+A_1 \rightarrow A_3 m | A_2 n | n | A_2 \* A_1 | A_2 / A_1 | \*A_1 | A_2\* | /A_1 | A_2/ \\\\
+A_2 \rightarrow A_3 m | A_2 n | n \\\\
+A_3 \rightarrow A_3 h | h \\\\
+\end{cases}
+$
+
+În regulile $ A_2 \rightarrow A_2 n $ avem încă o instanță de recursie stângă.
+Se adaugă un neterminal $ X_2 \rightarrow n | n X_2 $, eliminăm regula $ A_2 \rightarrow A_2 n $ și adaugăm regulile
+$ A_2 \rightarrow A_3 m X_2 | n X_2 $.
+
+$ P _ 1 ^ {\prime \prime} =
+\begin{cases}
+A_0 \rightarrow A_3 m | A_2 n | n | A_2 \* A_1 | A_2 / A_1 | \*A_1 | A_2\* | /A_1 | A_2/ | m | +A_1 | -A_1 | \varepsilon \\\\
+A_0 \rightarrow A_3 m X_0 | A_2 n X_0 | n X_0 | A_2 \* A_1 X_0 | A_2 / A_1 X_0 | \* A_1 X_0 | A_2 \* X_0 | /A_1 X_0 | A_2/ X_0 | m X_0 | + A_1 X_0| - A_1 X_0 | X_0  \\\\
+X_0 \rightarrow + A_1 | + A_1 X_0 | - A_1 | - A_1 X_0 | + | + X_0 | - | - X_0 \\\\
+A_1 \rightarrow A_3 m | A_2 n | n | A_2 \* A_1 | A_2 / A_1 | \*A_1 | A_2\* | /A_1 | A_2/ \\\\
+A_2 \rightarrow A_3 m | n | A_3 m X_2 | n X_2 \\\\
+X_2 \rightarrow n | n X_2 \\\\
+A_3 \rightarrow A_3 h | h \\\\
+\end{cases}
+$
+
+Ultima instanță recursiei: $ A_3 \rightarrow A_3 h $.
+
+$ P _ 1 ^ {\prime \prime \prime} =
+\begin{cases}
+A_0 \rightarrow A_3 m | A_2 n | n | A_2 \* A_1 | A_2 / A_1 | \*A_1 | A_2\* | /A_1 | A_2/ | m | +A_1 | -A_1 | \varepsilon \\\\
+A_0 \rightarrow A_3 m X_0 | A_2 n X_0 | n X_0 | A_2 \* A_1 X_0 | A_2 / A_1 X_0 | \* A_1 X_0 | A_2 \* X_0 | /A_1 X_0 | A_2/ X_0 | m X_0 | + A_1 X_0| - A_1 X_0 | X_0  \\\\
+X_0 \rightarrow + A_1 | + A_1 X_0 | - A_1 | - A_1 X_0 | + | + X_0 | - | - X_0 \\\\
+A_1 \rightarrow A_3 m | A_2 n | n | A_2 \* A_1 | A_2 / A_1 | \*A_1 | A_2\* | /A_1 | A_2/ \\\\
+A_2 \rightarrow A_3 m | n | A_3 m X_2 | n X_2 \\\\
+X_2 \rightarrow n | n X_2 \\\\
+A_3 \rightarrow h | h X_3 \\\\
+X_3 \rightarrow h | h X_3 \\\\
+\end{cases}
+$
+
+Se înlocuiesc $ X_0 \rightarrow A_4, X_2 \rightarrow A_5, X_3 \rightarrow A_6 $.
+
+$ P _ 1 ^ {\prime \prime \prime \prime} =
+\begin{cases}
+A_0 \rightarrow A_3 m | A_2 n | n | A_2 \* A_1 | A_2 / A_1 | \*A_1 | A_2\* | /A_1 | A_2/ | m | +A_1 | -A_1 | \varepsilon \\\\
+A_0 \rightarrow A_3 m A_4 | A_2 n A_4 | n A_4 | A_2 \* A_1 A_4 | A_2 / A_1 A_4 | \* A_1 A_4 | A_2 \* A_4 | /A_1 A_4 | A_2/ A_4 | m A_4 | + A_1 A_4| - A_1 A_4 | A_4  \\\\
+A_1 \rightarrow A_3 m | A_2 n | n | A_2 \* A_1 | A_2 / A_1 | \*A_1 | A_2\* | /A_1 | A_2/ \\\\
+A_2 \rightarrow A_3 m | n | A_3 m A_5 | n A_5 \\\\
+A_3 \rightarrow h | h A_6 \\\\
+A_4 \rightarrow + A_1 | + A_1 A_4 | - A_1 | - A_1 A_4 | + | + A_4 | - | - A_4 \\\\
+A_5 \rightarrow n | n A_5 \\\\
+A_6 \rightarrow h | h A_6 \\\\
+\end{cases}
+$
+
+
+> 2. Se aduce la forma $ A_i \rightarrow A_j \alpha, j > i $.
+
+Gramatica deja este în această formă.
 
