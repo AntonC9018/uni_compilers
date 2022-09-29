@@ -23,7 +23,8 @@ import mir.ndslice;
 struct Derivation
 {
     const(size_t)[] tokenizedInput;
-    Slice!(bool*, 3) P;
+    import std.traits : ReturnType;
+    ReturnType!(bitSlice!3) P;
     Slice!(Triple[]*, 3) back;
     bool isPartOfLanguage() const { return P[$ - 1, 0, 0]; }
 }
@@ -69,7 +70,7 @@ Derivation getDerivation(const typeof(Grammar.productions) productions, const(si
     int r = cast(int) productions.length;
 
     // let P[n,n,r] be an array of booleans. Initialize all elements of P to false.
-    auto P = slice!bool(n, n, r);
+    auto P = bitSlice(n, n, r);
 
     // let back[n,n,r] be an array of lists of backpointing triples.
     // Initialize all elements of back to the empty list.
