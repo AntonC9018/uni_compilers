@@ -144,7 +144,7 @@ Z_1 \rightarrow X_{=} A
 
 ## Folosirea algoritmului Cocke-Younger-Kasami
 
-Rulez programul meu care realizează algoritmul pe gramatica dată.
+Rulez programul meu care aplică algoritmul pe gramatica dată și cuvântul dedus interior.
 
 ```
 Terminals: v,;,,,=                                                                                     

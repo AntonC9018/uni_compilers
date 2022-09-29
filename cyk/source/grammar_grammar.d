@@ -36,7 +36,6 @@ struct Line
         auto or = node.children[0];
         assert(or.children.length == 1);
         
-        Line line;
         _node = node;
         switch (or.children[0].name)
         {
