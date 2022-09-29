@@ -54,18 +54,26 @@ int main(string[] args)
 			continue;
 
 		auto parsedLine = NormalizedGrammar.Line(line);
-        if (parsedLine.end != line.length)
+
+        void writeLocation()
         {
-            writeln("Did not parse the whole line, okay until ", line[parsedLine.end .. $],
-                " (position ", parsedLine.end, ")");
+            import std.path;
+            write(absolutePath(grammarPath), "(", lineIndex + 1, ",", parsedLine.end + 1, "): ");
+        }
+        
+        if (!parsedLine.successful)
+        {
+            writeln(line);
+            writeLocation();
+            writeln(parsedLine.failMsg);
             badInput = true;
             continue;
         }
-        if (!parsedLine.successful)
+        if (parsedLine.end != line.length)
         {
-            writeln("Bad syntax on line ", lineIndex);
-            writeln(parsedLine.failMsg);
-            writeln(parsedLine);
+            writeln(line);
+            writeLocation();
+            writeln("Did not parse the whole line, okay until '", line[parsedLine.end .. $], "'");
             badInput = true;
             continue;
         }
