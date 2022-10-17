@@ -32,7 +32,7 @@ Avem două simboluri ce trec în $ \varepsilon $, $ M_0 = \\{ T, F \\} $.
 
 În $ M_1 $ vom adăuga toate simbolurile care trec în unul sau mai multe simboluri din $ M_0 $, și toate elementele din $ M_0 $. $ M_1 = \\{ T, F, E \\}$. Nu mai avem simboluri care trec în $ E $.
 
-Acum se substituie toate aparițiile elementelor din $ \\{ M_1 \\} $ în orice alte reguli la $ \vareplison $. Se mai adaugă și regula $ E \rightarrow \varepsilon $, deoarece $ E \in M_1 $ și $ E $ este regula de start.
+Acum se substituie toate aparițiile elementelor din $ \\{ M_1 \\} $ în orice alte reguli la $ \varepsilon $. Se mai adaugă și regula $ E \rightarrow \varepsilon $, deoarece $ E \in M_1 $ și $ E $ este regula de start.
 
 $ E \rightarrow E + T \xrightarrow{E \rightarrow \varepsilon} E \rightarrow + T $
 
