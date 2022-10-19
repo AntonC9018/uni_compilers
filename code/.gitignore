@@ -2,7 +2,6 @@
 docs.json
 __dummy.html
 docs/
-/cyk
 cyk.so
 cyk.dylib
 cyk.dll
@@ -13,3 +12,4 @@ cyk-test-*
 *.o
 *.obj
 *.lst
+compilers.lib

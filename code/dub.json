@@ -1,0 +1,35 @@
+{
+	"authors": [
+		"Anton"
+	],
+	
+	"copyright": "Copyright © 2022, Anton",
+	"description": "A minimal D application.",
+	"license": "proprietary",
+	"name": "compilers",
+	"sourcePaths": ["source/shared"],
+	"targetType": "executable",
+	"configurations": [
+		{
+			"name": "precedence",
+			"dependencies":
+			{
+				"mir-algorithm": "~>2.0.0"
+			},
+			"sourcePaths": [
+				"source/precedence"
+			] 
+		},
+		{
+			"name": "cyk",
+			"dependencies":
+			{
+				"pegged": "~>0.4.6",
+				"mir-algorithm": "~>2.0.0"
+			},
+			"sourcePaths": [
+				"source/cyk"
+			]
+		}
+	]
+}
