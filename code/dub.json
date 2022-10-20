@@ -2,7 +2,7 @@
 	"authors": [
 		"Anton"
 	],
-	
+	"buildOptions": ["debugInfoC"],
 	"copyright": "Copyright © 2022, Anton",
 	"description": "A minimal D application.",
 	"license": "proprietary",

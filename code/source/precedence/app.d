@@ -58,6 +58,22 @@ void addProduction(ref Grammar g, size_t lhsId, const(string)[] rhs)
     g.symbols[lhsId].productions ~= Production(rhsIds);
 }
 
+void writeProduction(TWriter)(auto ref TWriter w, in Grammar g, size_t lhs, const(size_t)[] rhs)
+{
+    import std.format.write;
+    w.put(g.symbols[lhs].name);
+    w.put(" --> ");
+    foreach (s; rhs)
+        w.put(g.symbols[s].name);
+    w.put("\n");
+}
+
+void writeProductions(TWriter)(auto ref TWriter w, in Grammar g, size_t lhs)
+{
+    foreach (p1; g.symbols[lhs].productions)
+        writeProduction(w, g, lhs, p1.rhsIds);
+}
+
 void addProduction(ref Grammar g, string lhs, const(string)[] rhs)
 {
     addProduction(g, g.addOrGetSymbolId(lhs), rhs);
@@ -67,13 +83,15 @@ void main(string[] args)
 {
     Grammar g;
     // 1. S→A  2. A→B  3. A→AcB  4. B→a  5. B →b 6. B→dD  7. D→Ae
-    g.addProduction("S", ["A"]);
-    g.addProduction("A", ["B"]);
-    g.addProduction("A", ["A", "c", "B"]);
-    g.addProduction("B", ["a"]);
-    g.addProduction("B", ["b"]);
-    g.addProduction("B", ["d", "D"]);
-    g.addProduction("D", ["A", "e"]);
+    // g.addProduction("S", ["A"]);
+    // g.addProduction("A", ["B"]);
+    // g.addProduction("A", ["A", "c", "B"]);
+    // g.addProduction("B", ["a"]);
+    // g.addProduction("B", ["b"]);
+    // g.addProduction("B", ["d", "D"]);
+    // g.addProduction("D", ["A", "e"]);
+    g.addProduction("S", ["a", "S", "S", "b"]);
+    g.addProduction("S", ["c"]);
 
 
     import std.stdio;
@@ -180,6 +198,12 @@ void main(string[] args)
 
     auto headTable = makeOperationTable!(rhsIds => rhsIds[0])(g);
     auto tailTable = makeOperationTable!(rhsIds => rhsIds[$ - 1])(g);
+
+    foreach (p; g.productions)
+        writeProduction(stdout.lockingTextWriter, g, p.lhsId, p.rhsIds);
+    headTable.writeTo(stdout.lockingTextWriter, g, "Head");
+    tailTable.writeTo(stdout.lockingTextWriter, g, "Tail");
+
     auto nullablePrecedenceTable = getPrecedenceTable(g, headTable, tailTable);
 
     // G is uniquely inversible?? how to prove?
@@ -193,6 +217,7 @@ void main(string[] args)
     }
 
     auto precedenceTable = nullablePrecedenceTable.get();
+    writePrecedenceTable(stdout.lockingTextWriter, g, precedenceTable);
 
     while (true)
     {
@@ -216,6 +241,9 @@ void main(string[] args)
                 writeln(f, " didn't match a terminal.");
                 return;
             }
+
+            import std.string;
+            writeln("Input: ", input.strip, "; Stack: ", stack);
             
             PrecedenceRelationKind getRelationKindFromStack()
             {
@@ -235,7 +263,7 @@ void main(string[] args)
                 else
                 {
                     auto top = stack[$ - 1];
-                    return precedenceTable[top.get!size_t().value, fid];
+                    return precedenceTable[top.get!size_t(), fid];
                 }
             }
             PrecedenceRelationKind relationKind = getRelationKindFromStack();
@@ -317,7 +345,7 @@ void main(string[] args)
                         else
                         {
                             auto top = stack[$ - 1];
-                            return precedenceTable[lhsId, top.get!size_t().value];
+                            return precedenceTable[lhsId, top.get!size_t()];
                         }
                     }
 
@@ -360,24 +388,34 @@ auto getPrecedenceTable(in Grammar g, in OperationTable headTable, in OperationT
             return;
 
         isGood = false;
-        writeln(g.symbols[i], " and ", g.symbols[j], " have ambiguous precedence relation of ", value, " and ", *p);
+        writeln(g.symbols[i].name, " and ", g.symbols[j].name, " have ambiguous precedence relation of ", value, " and ", *p);
+        writeProductions(stdout.lockingTextWriter, g, i);
+        writeProductions(stdout.lockingTextWriter, g, j);
     }
 
     foreach (p; g.productions)
     {
         foreach (i; 1 .. p.rhsIds.length)
         {
-            size_t j = i - 1;
+            size_t x = p.rhsIds[i - 1];
+            size_t y = p.rhsIds[i];
 
-            unambiguousSet(i, j, PrecedenceRelationKind.DotEqual);
-            foreach (headId; headTable.iterate(j))
-                unambiguousSet(i, headId, PrecedenceRelationKind.DotLess);
+            // X =. Y
+            unambiguousSet(x, y, PrecedenceRelationKind.DotEqual);
             
-            foreach (tailId; tailTable.iterate(i))
+            // X <. Head+(Y)
+            foreach (headId; headTable.iterate(y))
+                unambiguousSet(x, headId, PrecedenceRelationKind.DotLess);
+            
+            // Tail+(X) >. Head*(Y)
+            foreach (tailId; tailTable.iterate(x))
             {
-                foreach (headId; headTable.iterate(j))
+                if (g.symbols[y].isTerminal)
+                    unambiguousSet(tailId, y, PrecedenceRelationKind.DotGreater);
+
+                foreach (headId; headTable.iterate(y))
                 {
-                    if (g.symbols[tailId].isTerminal)
+                    if (g.symbols[headId].isTerminal)
                         continue;
                     unambiguousSet(tailId, headId, PrecedenceRelationKind.DotGreater);
                 }
@@ -389,98 +427,119 @@ auto getPrecedenceTable(in Grammar g, in OperationTable headTable, in OperationT
     return isGood ? nullable(precedenceTable) : typeof(nullable(precedenceTable)).init;
 }
 
-// S -> Aa
-// A -> Bb
-// B -> Sc | d
+import mir.ndslice : Slice;
+void writePrecedenceTable(TWriter)(auto ref TWriter w, in Grammar g, Slice!(PrecedenceRelationKind*, 2) precedenceTable)
+{
+    static string getRelationString(PrecedenceRelationKind kind)
+    {
+        final switch (kind)
+        {
+            case PrecedenceRelationKind.DotEqual:
+                return "=";
+            case PrecedenceRelationKind.DotGreater:
+                return ">";
+            case PrecedenceRelationKind.DotLess:
+                return "<";
+            case PrecedenceRelationKind.None:
+                return " ";
+        }
+    }
 
+    import std.algorithm;
+    size_t length = g.symbols[].map!(s => s.name.length).maxElement + 1;
 
-// S -> A,      A, B, S             A 
-//              B, S
-// A -> B       B, S, B, A          B, c
-// A -> c
-//              S, B, A       
-// B -> S       S, S, A, S, B       
-// B -> d                           S, d
-//              S, A, S, B
-// S -> A       S, A, S, B, B, S    A, B, c, S, d
-//              A, S, B, B, S
-//              S, B, B, S
-// A -> B       S, B, B, S, S, A    B, c, S, d, A
-//              B, B, S, S, A
-//              B, S, S, A
-// B -> S       B, S, S, A          S, d, A, B, c, d
+    import std.format.write;
 
+    w.formattedWrite!"%*c"(length, ' ');
+    foreach (i, s; g.symbols)
+        w.formattedWrite!"|%*s"(length, s.name);
 
-// S -> A       A, S        A
-//              S           
-// A -> B       S, B, A     B
-// A -> c                   B, c
-//              B, A
-// S -> A       B, A, S     A, B, c
-//              A, S
-// B -> S       A, S, B     S, A, B, c
-// B -> d                   S, A, B, c, d
-//              S, B
-// A -> B       S, B, A     S, A, B, c, d
-//              B, A
-// S -> A       B, A, S     S, A, B, c, d
+    foreach (i; 0 .. g.symbols.length)
+    {
+        w.put("\n");
+        w.formattedWrite!"%*s"(length, g.symbols[i].name);
+        auto row = precedenceTable[i,];
+        foreach (relationKind; row)
+            w.formattedWrite!"|%*s"(length, getRelationString(relationKind));
+    }
+    w.put("\n");
+}
 
 static struct OperationTable
 {
     import std.bitmanip;
     size_t[] _memory;
-    size_t _dimension;
+    size_t _dimensionBits;
+    size_t _dimensionSizeTs;
 
-    this(size_t[] memory, size_t dimension)
-    {
-        _memory = memory;
-        _dimension = dimension;
-    }
+    // this(size_t[] memory, size_t dimensionBits)
+    // {
+    //     import std.algorithm;
+    //     _memory = memory;
+    //     _dimensionBits = dimensionBits;
+    // }
 
-    this(size_t dimension, size_t numRows)
+    this(size_t dimensionBits, size_t numRows)
     {
-        _memory = new size_t[](dimension * numRows);
-        _dimension = dimension;
+        import std.algorithm;
+        _dimensionSizeTs = max(dimensionBits / (8 * size_t.sizeof), 1);
+        _memory = new size_t[](_dimensionSizeTs * numRows);
+        _dimensionBits = dimensionBits;
     }
     
     inout(size_t[]) getSliceOf(size_t id) inout
     {
-        return _memory[id * _dimension .. (id + 1) * _dimension];
+        return _memory[id * _dimensionSizeTs .. (id + 1) * _dimensionSizeTs];
     }
 
     inout(BitArray) getBitArrayOf(size_t id) inout
     {
-        return inout(BitArray)(cast(void[]) getSliceOf(id), _dimension);
+        return inout(BitArray)(cast(void[]) getSliceOf(id), _dimensionBits);
     }
 
     auto iterate(size_t id) inout
     {
         return getBitArrayOf(id).bitsSet;
     }
+
+    void writeTo(TWriter)(auto ref TWriter w, in Grammar g, string funcName)
+    {
+        import std.format.write;
+        import std.range;
+        foreach (i, s; g.symbols)
+        {
+            w.formattedWrite!"%s(%s) = {"(funcName, s.name);
+            foreach (index, j; getBitArrayOf(i).bitsSet.enumerate)
+            {
+                if (index != 0)
+                    w.put(", ");
+                w.put(g.symbols[j].name);
+            }
+            w.put("}\n");
+        }
+    }
 }
 
 static OperationTable makeOperationTable(alias getRhsElementOperation)(in Grammar g)
 {
-    import std.algorithm;
+    auto resultTable = OperationTable(g.symbols.length, g.symbols.length);
 
-    size_t dimension = max(g.symbols.length / (8 * size_t.sizeof), 1);
-    auto resultTable = OperationTable(dimension, dimension);
-
-    auto tempTable = OperationTable(dimension, 3);
-    auto hasBeenQueued = tempTable.getBitArrayOf(1);
-    auto tempArray1 = tempTable.getBitArrayOf(2);
-    auto tempArray2 = tempTable.getBitArrayOf(3);
-    auto tempBuffer1 = tempTable.getSliceOf(2);
-    auto tempBuffer2 = tempTable.getSliceOf(3);
+    auto tempTable = OperationTable(g.symbols.length, 1);
+    auto tempArray1 = tempTable.getBitArrayOf(0);
+    auto tempBuffer1 = tempTable.getSliceOf(0);
 
     import std.container : DList;
-    auto queue = DList!size_t([0]);
+    auto queue = DList!size_t();
+    foreach (i, s; g.symbols)
+    {
+        if (!s.isTerminal)
+            queue ~= i;
+    }
+
     while (!queue.empty)
     {
-        size_t t = queue.back;
-        hasBeenQueued[t] = true;
-        queue.removeBack();
-
+        size_t t = queue.front;
+        queue.removeFront();
         tempBuffer1[] = 0;
         
         foreach (p; g.symbols[t].productions)
@@ -491,23 +550,25 @@ static OperationTable makeOperationTable(alias getRhsElementOperation)(in Gramma
         }
         
         // whichever things were new.
-        // t1 &= ~h(t)
-        tempBuffer2[] = resultTable.getSliceOf(t)[];
-        tempArray2.flip();
-        tempBuffer1[] &= tempBuffer2[];
+        tempBuffer1[] &= ~resultTable.getSliceOf(t)[];
         
-        if (tempArray1.bitsSet.empty)
-            continue;
-
-        foreach (newIdIndex; tempArray1.bitsSet)
+        // Some new stuff was added.
+        if (!tempArray1.bitsSet.empty)
         {
-            if (!hasBeenQueued[newIdIndex])
-                queue ~= newIdIndex;
+            queue ~= t;
+            resultTable.getSliceOf(t)[] |= tempBuffer1[];
         }
-
-        queue ~= t;
-        resultTable.getSliceOf(t)[] = tempBuffer1[];
     }
 
     return resultTable;
+}
+
+import std.sumtype;
+auto get(V, T)(inout T sumtype)
+    if (is(T : SumType!(K), K...))
+{
+    return sumtype.match!(
+        (inout ref V v) => v,
+        (_) { assert(false, "Unexpected thing"); return V.init; }
+    );
 }
