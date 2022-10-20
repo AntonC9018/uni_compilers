@@ -644,7 +644,7 @@ static struct Stack(T)
         _currentLength = i;
         return _underlyingArray[i .. prev];
     }
-    auto popN(size_t i)
+    T[] popN(size_t i)
     {
         size_t prev = _currentLength;
         assert(_currentLength >= i);
