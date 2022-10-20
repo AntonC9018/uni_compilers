@@ -32,6 +32,17 @@ struct Grammar
                 .map!(p => ProductionInfo(t.index, p.rhsIds)))
             .joiner;
     }
+
+    auto terminals(this This)()
+    {
+        import std.range;
+        import std.algorithm;
+        import std.typecons;
+        return symbols[]
+            .enumerate
+            .filter!(t => t.value.isTerminal)
+            .map!(t => tuple!("index", "name")(t.index, t.value.name));
+    }
 }
 
 
@@ -47,7 +58,7 @@ size_t addOrGetSymbolId(ref Grammar g, string name)
     return cast(size_t) id;
 }
 
-void addProduction(ref Grammar g, size_t lhsId, const(string)[] rhs)
+void addProduction(ref Grammar g, size_t lhsId, scope const(string)[] rhs)
 {
     size_t[] rhsIds;
     foreach (symbolName; rhs)
@@ -58,7 +69,7 @@ void addProduction(ref Grammar g, size_t lhsId, const(string)[] rhs)
     g.symbols[lhsId].productions ~= Production(rhsIds);
 }
 
-void writeProduction(TWriter)(auto ref TWriter w, in Grammar g, size_t lhs, const(size_t)[] rhs)
+void writeProduction(TWriter)(auto ref TWriter w, in Grammar g, size_t lhs, scope const(size_t)[] rhs)
 {
     import std.format.write;
     w.put(g.symbols[lhs].name);
@@ -74,7 +85,7 @@ void writeProductions(TWriter)(auto ref TWriter w, in Grammar g, size_t lhs)
         writeProduction(w, g, lhs, p1.rhsIds);
 }
 
-void addProduction(ref Grammar g, string lhs, const(string)[] rhs)
+void addProduction(ref Grammar g, string lhs, scope const(string)[] rhs)
 {
     addProduction(g, g.addOrGetSymbolId(lhs), rhs);
 }
@@ -90,8 +101,22 @@ void main(string[] args)
     // g.addProduction("B", ["b"]);
     // g.addProduction("B", ["d", "D"]);
     // g.addProduction("D", ["A", "e"]);
-    g.addProduction("S", ["a", "S", "S", "b"]);
-    g.addProduction("S", ["c"]);
+
+    // Example from wiki
+    // https://www.wikiwand.com/en/Wirth%E2%80%93Weber_precedence_relationship#/Examples
+    // g.addProduction("S", ["a", "S", "S", "b"]);
+    // g.addProduction("S", ["c"]);
+
+    // Example from wiki
+    // https://www.wikiwand.com/en/Simple_precedence_parser#/Example
+    g.addProduction("E", ["E", "+", "T'"]);
+    g.addProduction("E", ["T'"]);
+    g.addProduction("T'", ["T"]);
+    g.addProduction("T", ["T", "*", "F"]);
+    g.addProduction("T", ["F"]);
+    g.addProduction("F", ["(", "E'", ")"]);
+    g.addProduction("F", ["num"]);
+    g.addProduction("E'", ["E"]);
 
 
     import std.stdio;
@@ -221,144 +246,105 @@ void main(string[] args)
 
     while (true)
     {
+        import std.string;
+        
         write("Enter input: ");
-        string inputLine = readln();
+        string inputLine = readln().strip;
 
-        string input = inputLine;
-        import std.sumtype;
+        auto maybeInput = tokenize(g, inputLine);
+        if (maybeInput.isNull)
+            continue;
+        size_t[] input = maybeInput.get();
+        
+        if (matchInput(g, precedenceTable, input))
+            writeln("Input matched");
+    }
+}
 
-        alias StackEl = SumType!(size_t, PrecedenceRelationKind);
-        StackEl[] stack;
+bool matchInput(in Grammar g, in PrecedenceTable precedenceTable, ref size_t[] input)
+{
+    import std.algorithm;
+    import std.range;
+    import std.array;
+    import std.stdio;
 
-        // stack ~= StackEl(size_t.max);
-        while (true)
+    input ~= g.symbols.length;
+
+    Stack!size_t stack;
+    Stack!PrecedenceRelationKind precedenceStack;
+    stack.push(g.symbols.length);
+
+    outerLoop: while (!(
+        input.front == g.symbols.length
+        && stack[] == [g.symbols.length, 0]
+    ))
+    {
+        auto fid = input.front;
+        PrecedenceRelationKind relationKind = precedenceTable[stack.top, fid];
+
         {
-            auto f = input.front;
-            // TODO: tokenize in a normal way.
-            auto fid = g.symbols[].countUntil!(a => a.isTerminal && a.name[0] == f);
-            if (fid == -1)
-            {
-                writeln(f, " didn't match a terminal.");
-                return;
-            }
-
-            import std.string;
-            writeln("Input: ", input.strip, "; Stack: ", stack);
-            
-            PrecedenceRelationKind getRelationKindFromStack()
-            {
-                if (stack.empty)
-                {
-                    // $ <. Head+(S)
-                    if (headTable.getBitArrayOf(0)[fid])
-                    {
-                        return PrecedenceRelationKind.DotLess;
-                    }
-                    else
-                    {
-                        writeln("Not alowed");
-                        return PrecedenceRelationKind.None;
-                    }
-                }
-                else
-                {
-                    auto top = stack[$ - 1];
-                    return precedenceTable[top.get!size_t(), fid];
-                }
-            }
-            PrecedenceRelationKind relationKind = getRelationKindFromStack();
-
-            final switch (relationKind)
-            {
-                case PrecedenceRelationKind.None:
-                {
-                    writeln("Precedence relation none, shouldn't happen. Probably input doesn't match.");
-                    return;
-                }
-                case PrecedenceRelationKind.DotLess:
-                case PrecedenceRelationKind.DotEqual:
-                {
-                    stack ~= StackEl(relationKind);
-                    stack ~= StackEl(fid);
-                    input.popFront();
-                    break;
-                }
-
-                case PrecedenceRelationKind.DotGreater:
-                {
-                    int i = cast(int) stack.length;
-                    for (; i >= 0; i--)
-                    {
-                        if (stack[i].match!(
-                            (PrecedenceRelationKind k) => k == PrecedenceRelationKind.DotLess,
-                            _ => false))
-                        {
-                            break;
-                        }
-                    }
-                    if (i == -1)
-                    {
-                        writeln("didn't find the <.??");
-                        return;
-                    }
-                    auto pivot = stack[i .. $];
-
-                    import std.array;
-                    auto pivotIds = appender!(size_t[]);
-                    foreach (p; pivot[])
-                        p.tryMatch!((size_t id) => pivotIds ~= id);
-
-                    import std.algorithm;
-                    auto prods = g.productions.find!(t => t.rhsIds[] == pivotIds[]);
-                    if (prods.empty)
-                    {
-                        writeln("Shouldn't be empty");
-                        return;
-                    }
-
-                    auto prod = prods.front;
-                    auto lhsId = prod.lhsId;
-
-                    // import std.range;
-                    // auto relations = pivot[].retro.find!(t => t.canMatch!((PrecedenceRelationKind k){}));
-                    // if (relations.empty)
-                    // {
-                    //     writeln("Shouldn't be empty 2.");
-                    //     return;
-                    // }
-
-                    PrecedenceRelationKind getRelationKindFromStack2()
-                    {
-                        if (stack.empty)
-                        {
-                            // $ <. Head+(S)
-                            if (tailTable.getBitArrayOf(0)[lhsId])
-                            {
-                                return PrecedenceRelationKind.DotGreater;
-                            }
-                            else
-                            {
-                                writeln("Not alowed");
-                                return PrecedenceRelationKind.None;
-                            }
-                        }
-                        else
-                        {
-                            auto top = stack[$ - 1];
-                            return precedenceTable[lhsId, top.get!size_t()];
-                        }
-                    }
-
-                    auto relation = getRelationKindFromStack2();
-                    stack ~= StackEl(relation);
-                    stack ~= StackEl(lhsId);
-                    break;
-                }
-            }
-
+            auto i = input[].map!(i => g.getPrecedenceSymbolName(i)).joiner;
+            auto a = stack[].map!(s => getPrecedenceSymbolName(g, s));
+            auto b = precedenceStack[].map!(k => getRelationString(k));
+            auto s = a.take(1).chain(b.interlace(a.drop(1))).joiner(", ");
+            writeln("Input: ", i, "; Stack: ", s);
         }
 
+        final switch (relationKind)
+        {
+            case PrecedenceRelationKind.None:
+            {
+                writeln("Precedence relation none, shouldn't happen. Probably input doesn't match.");
+                return false;
+            }
+            case PrecedenceRelationKind.DotLess:
+            case PrecedenceRelationKind.DotEqual:
+            {
+                precedenceStack.push(relationKind);
+                stack.push(fid);
+                input.popFront();
+                break;
+            }
+
+            case PrecedenceRelationKind.DotGreater:
+            {
+                auto t = precedenceStack[].retro.countUntil!(k => k == PrecedenceRelationKind.DotLess);
+                if (t == -1)
+                {
+                    writeln("didn't find the <.??");
+                    return false;
+                }
+                t += 1;
+                auto pivot = stack.popN(t);
+                precedenceStack.popN(t);
+
+                writeln(pivot);
+
+                import std.algorithm;
+                auto prods = g.productions.find!(t => t.rhsIds[] == pivot[]);
+                if (prods.empty)
+                {
+                    writeln("Shouldn't be empty");
+                    return false;
+                }
+
+                auto prod = prods.front;
+                auto lhsId = prod.lhsId;
+
+                auto relation = precedenceTable[stack.top, lhsId];
+                if (relation == PrecedenceRelationKind.None)
+                {
+                    writeln("Invalid input?");
+                    return false;
+                }
+                precedenceStack.push(relation);
+                stack.push(lhsId);
+                break;
+            }
+        }
     }
+
+    return true;
 }
 
 enum PrecedenceRelationKind
@@ -369,11 +355,19 @@ enum PrecedenceRelationKind
     DotGreater,
 }
 
+string getPrecedenceSymbolName(in Grammar g, size_t i)
+{
+    if (i == g.symbols.length)
+        return "$";
+    else
+        return g.symbols[i].name;
+}
+
 auto getPrecedenceTable(in Grammar g, in OperationTable headTable, in OperationTable tailTable)
 {
     import mir.ndslice;
     import std.stdio;
-    auto precedenceTable = slice!PrecedenceRelationKind(g.symbols.length, g.symbols.length);
+    auto precedenceTable = slice!PrecedenceRelationKind(g.symbols.length + 1, g.symbols.length + 1);
 
     bool isGood = true;
     void unambiguousSet(size_t i, size_t j, PrecedenceRelationKind value)
@@ -416,35 +410,41 @@ auto getPrecedenceTable(in Grammar g, in OperationTable headTable, in OperationT
                 foreach (headId; headTable.iterate(y))
                 {
                     if (g.symbols[headId].isTerminal)
-                        continue;
-                    unambiguousSet(tailId, headId, PrecedenceRelationKind.DotGreater);
+                        unambiguousSet(tailId, headId, PrecedenceRelationKind.DotGreater);
                 }
             }
         }
     }
 
+    foreach (sid; headTable.iterate(0))
+        precedenceTable[g.symbols.length, sid] = PrecedenceRelationKind.DotLess;
+
+    foreach (sid; tailTable.iterate(0))
+        precedenceTable[sid, g.symbols.length] = PrecedenceRelationKind.DotGreater;
+
     import std.typecons;
     return isGood ? nullable(precedenceTable) : typeof(nullable(precedenceTable)).init;
 }
 
-import mir.ndslice : Slice;
-void writePrecedenceTable(TWriter)(auto ref TWriter w, in Grammar g, Slice!(PrecedenceRelationKind*, 2) precedenceTable)
+string getRelationString(PrecedenceRelationKind kind)
 {
-    static string getRelationString(PrecedenceRelationKind kind)
+    final switch (kind)
     {
-        final switch (kind)
-        {
-            case PrecedenceRelationKind.DotEqual:
-                return "=";
-            case PrecedenceRelationKind.DotGreater:
-                return ">";
-            case PrecedenceRelationKind.DotLess:
-                return "<";
-            case PrecedenceRelationKind.None:
-                return " ";
-        }
+        case PrecedenceRelationKind.DotEqual:
+            return "=";
+        case PrecedenceRelationKind.DotGreater:
+            return ">";
+        case PrecedenceRelationKind.DotLess:
+            return "<";
+        case PrecedenceRelationKind.None:
+            return " ";
     }
+}
 
+import mir.ndslice : Slice;
+alias PrecedenceTable = Slice!(PrecedenceRelationKind*, 2);
+void writePrecedenceTable(TWriter)(auto ref TWriter w, in Grammar g, PrecedenceTable precedenceTable)
+{
     import std.algorithm;
     size_t length = g.symbols[].map!(s => s.name.length).maxElement + 1;
 
@@ -453,11 +453,12 @@ void writePrecedenceTable(TWriter)(auto ref TWriter w, in Grammar g, Slice!(Prec
     w.formattedWrite!"%*c"(length, ' ');
     foreach (i, s; g.symbols)
         w.formattedWrite!"|%*s"(length, s.name);
+    w.formattedWrite!"|%*s"(length, "$");
 
-    foreach (i; 0 .. g.symbols.length)
+    foreach (i; 0 .. g.symbols.length + 1)
     {
         w.put("\n");
-        w.formattedWrite!"%*s"(length, g.symbols[i].name);
+        w.formattedWrite!"%*s"(length, g.getPrecedenceSymbolName(i));
         auto row = precedenceTable[i,];
         foreach (relationKind; row)
             w.formattedWrite!"|%*s"(length, getRelationString(relationKind));
@@ -487,19 +488,20 @@ static struct OperationTable
         _dimensionBits = dimensionBits;
     }
     
-    inout(size_t[]) getSliceOf(size_t id) inout
+    inout(size_t[]) getSlice(size_t id) inout
     {
         return _memory[id * _dimensionSizeTs .. (id + 1) * _dimensionSizeTs];
     }
 
-    inout(BitArray) getBitArrayOf(size_t id) inout
+    inout(BitArray) getBitArray(size_t id) inout
     {
-        return inout(BitArray)(cast(void[]) getSliceOf(id), _dimensionBits);
+        return inout(BitArray)(cast(void[]) getSlice(id), _dimensionBits);
     }
 
     auto iterate(size_t id) inout
     {
-        return getBitArrayOf(id).bitsSet;
+        import core.bitop;
+        return BitRange(getSlice(id).ptr, _dimensionBits);
     }
 
     void writeTo(TWriter)(auto ref TWriter w, in Grammar g, string funcName)
@@ -509,7 +511,7 @@ static struct OperationTable
         foreach (i, s; g.symbols)
         {
             w.formattedWrite!"%s(%s) = {"(funcName, s.name);
-            foreach (index, j; getBitArrayOf(i).bitsSet.enumerate)
+            foreach (index, j; getBitArray(i).bitsSet.enumerate)
             {
                 if (index != 0)
                     w.put(", ");
@@ -525,8 +527,8 @@ static OperationTable makeOperationTable(alias getRhsElementOperation)(in Gramma
     auto resultTable = OperationTable(g.symbols.length, g.symbols.length);
 
     auto tempTable = OperationTable(g.symbols.length, 1);
-    auto tempArray1 = tempTable.getBitArrayOf(0);
-    auto tempBuffer1 = tempTable.getSliceOf(0);
+    auto tempArray1 = tempTable.getBitArray(0);
+    auto tempBuffer1 = tempTable.getSlice(0);
 
     import std.container : DList;
     auto queue = DList!size_t();
@@ -546,17 +548,17 @@ static OperationTable makeOperationTable(alias getRhsElementOperation)(in Gramma
         {
             auto h = getRhsElementOperation(p.rhsIds);
             tempArray1[h] = true;
-            tempBuffer1[] |= resultTable.getSliceOf(h)[];
+            tempBuffer1[] |= resultTable.getSlice(h)[];
         }
         
         // whichever things were new.
-        tempBuffer1[] &= ~resultTable.getSliceOf(t)[];
+        tempBuffer1[] &= ~resultTable.getSlice(t)[];
         
         // Some new stuff was added.
         if (!tempArray1.bitsSet.empty)
         {
             queue ~= t;
-            resultTable.getSliceOf(t)[] |= tempBuffer1[];
+            resultTable.getSlice(t)[] |= tempBuffer1[];
         }
     }
 
@@ -571,4 +573,100 @@ auto get(V, T)(inout T sumtype)
         (inout ref V v) => v,
         (_) { assert(false, "Unexpected thing"); return V.init; }
     );
+}
+
+import std.typecons : Nullable, nullable;
+Nullable!(size_t[]) tokenize(const Grammar g, string input)
+{
+    import std.range;
+    import std.string;
+    import std.algorithm;
+    import std.stdio;
+
+    auto tokens = appender!(size_t[]);
+    int index = 0;
+
+    while (index != input.length)
+    {
+        bool matched = false;
+        foreach (tid, terminal; g.terminals)
+        {
+            if (input[index .. $].startsWith(terminal))
+            {
+                tokens ~= tid;
+                index += terminal.length;
+                matched = true;
+                break;
+            }
+        }
+
+        if (!matched)
+        {
+            writeln("Bad input around ", input[0 .. index],
+                ". Expected one of ", g.terminals.map!(t => t.name).join(','), " got ", input[index .. $]);
+            return typeof(return).init;
+        }
+    }
+    return nullable(tokens[]);
+}
+
+auto interlace(T1, T2)(T1 a, T2 b)
+{
+    import std.algorithm;
+    import std.range;
+    return a.zip(b).map!(t => [t.expand]).joiner;
+}
+
+static struct Stack(T)
+{
+    T[] _underlyingArray = null;
+    size_t _currentLength = 0;
+
+    auto opSlice(this This)()
+    {
+        return _underlyingArray[0 .. _currentLength];
+    }
+    void push(V : T)(auto ref V el)
+    {
+        import std.algorithm;
+        if (_underlyingArray.length <= _currentLength)
+            _underlyingArray.length = max(_underlyingArray.length * 2, 1);
+        _underlyingArray[_currentLength++] = el;
+    }
+    void pop()
+    {
+        _currentLength--;
+    }
+    T[] popFrom(size_t i)
+    {
+        size_t prev = _currentLength;
+        assert(_currentLength >= i);
+        _currentLength = i;
+        return _underlyingArray[i .. prev];
+    }
+    auto popN(size_t i)
+    {
+        size_t prev = _currentLength;
+        assert(_currentLength >= i);
+        _currentLength -= i;
+        return _underlyingArray[_currentLength .. prev];
+    }
+    bool empty() const
+    {
+        return _currentLength == 0;
+    }
+    ref inout(T) top() inout
+    {
+        assert(_currentLength > 0);
+        return _underlyingArray[_currentLength - 1];
+    }
+    void length(size_t s)
+    {
+        assert(_currentLength <= s);            
+        _currentLength = s;
+    }
+    size_t length() const
+    {
+        return _currentLength;
+    }
 }
