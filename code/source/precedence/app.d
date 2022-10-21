@@ -43,6 +43,8 @@ struct Grammar
             .filter!(t => t.value.isTerminal)
             .map!(t => tuple!("index", "name")(t.index, t.value.name));
     }
+
+    enum size_t initialSymbolId = 0;
 }
 
 
@@ -142,10 +144,11 @@ void main(string[] args)
 
     bool hasUnreachableSymbols =
     (){
+        // NOTE: bitSlice is kinda bad, should use core.bitop
         import mir.ndslice;
         auto metSymbol = bitSlice(g.symbols.length);
-        size_t[] toProcess = [0];
-        metSymbol[0] = true;
+        size_t[] toProcess = [g.initialSymbolId];
+        metSymbol[g.initialSymbolId] = true;
         while (toProcess.length != 0)
         {
             size_t t = toProcess[$ - 1];
@@ -175,6 +178,7 @@ void main(string[] args)
 
     bool hasUnproductiveSymbols =
     (){
+        // NOTE: bitSlice is kinda bad, should use core.bitop
         import mir.ndslice;
         auto metSymbol = bitSlice(g.symbols.length);
         int prevCount = 0;
@@ -268,28 +272,33 @@ bool matchInput(in Grammar g, in PrecedenceTable precedenceTable, ref size_t[] i
     import std.array;
     import std.stdio;
 
-    input ~= g.symbols.length;
+    const eof = g.symbols.length;
+    input ~= eof;
 
     Stack!size_t stack;
     Stack!PrecedenceRelationKind precedenceStack;
-    stack.push(g.symbols.length);
+    stack.push(eof);
 
-    outerLoop: while (!(
-        input.front == g.symbols.length
-        && stack[] == [g.symbols.length, 0]
-    ))
+    writeln(padRight("Stack", ' ', 50), "  ", padRight("Input", ' ', 50));
+    while (true)
     {
         auto fid = input.front;
-        PrecedenceRelationKind relationKind = precedenceTable[stack.top, fid];
 
         {
-            auto i = input[].map!(i => g.getPrecedenceSymbolName(i)).joiner;
+            auto i = input[].map!(i => g.getPrecedenceSymbolName(i)).joiner(" ");
             auto a = stack[].map!(s => getPrecedenceSymbolName(g, s));
-            auto b = precedenceStack[].map!(k => getRelationString(k));
-            auto s = a.take(1).chain(b.interlace(a.drop(1))).joiner(", ");
-            writeln("Input: ", i, "; Stack: ", s);
+            auto b = precedenceStack[].map!(k => getPrecedenceRelationString(k));
+            auto s = a.take(1).chain(b.interlace(a.drop(1))).joiner(" ");
+            writeln(padRight(s, ' ', 50), "  ", padRight(i, ' ', 50));
         }
 
+        if (input.front == eof
+            && stack[] == [eof, g.initialSymbolId])
+        {
+            return true;
+        }
+
+        PrecedenceRelationKind relationKind = precedenceTable[stack.top, fid];
         final switch (relationKind)
         {
             case PrecedenceRelationKind.None:
@@ -318,8 +327,6 @@ bool matchInput(in Grammar g, in PrecedenceTable precedenceTable, ref size_t[] i
                 auto pivot = stack.popN(t);
                 precedenceStack.popN(t);
 
-                writeln(pivot);
-
                 import std.algorithm;
                 auto prods = g.productions.find!(t => t.rhsIds[] == pivot[]);
                 if (prods.empty)
@@ -343,8 +350,6 @@ bool matchInput(in Grammar g, in PrecedenceTable precedenceTable, ref size_t[] i
             }
         }
     }
-
-    return true;
 }
 
 enum PrecedenceRelationKind
@@ -366,6 +371,7 @@ string getPrecedenceSymbolName(in Grammar g, size_t i)
 auto getPrecedenceTable(in Grammar g, in OperationTable headTable, in OperationTable tailTable)
 {
     import mir.ndslice;
+    import std.range;
     import std.stdio;
     auto precedenceTable = slice!PrecedenceRelationKind(g.symbols.length + 1, g.symbols.length + 1);
 
@@ -404,10 +410,7 @@ auto getPrecedenceTable(in Grammar g, in OperationTable headTable, in OperationT
             // Tail+(X) >. Head*(Y)
             foreach (tailId; tailTable.iterate(x))
             {
-                if (g.symbols[y].isTerminal)
-                    unambiguousSet(tailId, y, PrecedenceRelationKind.DotGreater);
-
-                foreach (headId; headTable.iterate(y))
+                foreach (headId; headTable.iterate(y).chain(only(y)))
                 {
                     if (g.symbols[headId].isTerminal)
                         unambiguousSet(tailId, headId, PrecedenceRelationKind.DotGreater);
@@ -415,18 +418,17 @@ auto getPrecedenceTable(in Grammar g, in OperationTable headTable, in OperationT
             }
         }
     }
-
-    foreach (sid; headTable.iterate(0))
+    foreach (sid; headTable.iterate(g.initialSymbolId))
         precedenceTable[g.symbols.length, sid] = PrecedenceRelationKind.DotLess;
 
-    foreach (sid; tailTable.iterate(0))
+    foreach (sid; tailTable.iterate(g.initialSymbolId))
         precedenceTable[sid, g.symbols.length] = PrecedenceRelationKind.DotGreater;
 
     import std.typecons;
     return isGood ? nullable(precedenceTable) : typeof(nullable(precedenceTable)).init;
 }
 
-string getRelationString(PrecedenceRelationKind kind)
+string getPrecedenceRelationString(PrecedenceRelationKind kind)
 {
     final switch (kind)
     {
@@ -461,7 +463,7 @@ void writePrecedenceTable(TWriter)(auto ref TWriter w, in Grammar g, PrecedenceT
         w.formattedWrite!"%*s"(length, g.getPrecedenceSymbolName(i));
         auto row = precedenceTable[i,];
         foreach (relationKind; row)
-            w.formattedWrite!"|%*s"(length, getRelationString(relationKind));
+            w.formattedWrite!"|%*s"(length, getPrecedenceRelationString(relationKind));
     }
     w.put("\n");
 }
@@ -610,11 +612,11 @@ Nullable!(size_t[]) tokenize(const Grammar g, string input)
     return nullable(tokens[]);
 }
 
-auto interlace(T1, T2)(T1 a, T2 b)
+auto interlace(T...)(auto ref T args)
 {
     import std.algorithm;
     import std.range;
-    return a.zip(b).map!(t => [t.expand]).joiner;
+    return zip(args).map!(t => only(t.expand)).joiner;
 }
 
 static struct Stack(T)
@@ -637,13 +639,6 @@ static struct Stack(T)
     {
         _currentLength--;
     }
-    T[] popFrom(size_t i)
-    {
-        size_t prev = _currentLength;
-        assert(_currentLength >= i);
-        _currentLength = i;
-        return _underlyingArray[i .. prev];
-    }
     T[] popN(size_t i)
     {
         size_t prev = _currentLength;
@@ -659,11 +654,6 @@ static struct Stack(T)
     {
         assert(_currentLength > 0);
         return _underlyingArray[_currentLength - 1];
-    }
-    void length(size_t s)
-    {
-        assert(_currentLength <= s);            
-        _currentLength = s;
     }
     size_t length() const
     {
