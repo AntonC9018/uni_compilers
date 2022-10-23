@@ -299,7 +299,8 @@ static struct OperationTable
     this(size_t dimensionBits, size_t numRows)
     {
         import std.algorithm;
-        _dimensionSizeTs = max(dimensionBits / (8 * size_t.sizeof), 1);
+        import sharedd.helper;
+        _dimensionSizeTs = ceilDivide(dimensionBits, 8 * size_t.sizeof);
         _memory = new size_t[](_dimensionSizeTs * numRows);
         _dimensionBits = dimensionBits;
     }

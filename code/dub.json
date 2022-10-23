@@ -7,7 +7,7 @@
 	"description": "A minimal D application.",
 	"license": "proprietary",
 	"name": "compilers",
-	"sourcePaths": ["source/shared"],
+	"sourcePaths": ["source/sharedd"],
 	"targetType": "executable",
 	"configurations": [
 		{
