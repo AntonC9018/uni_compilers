@@ -6,13 +6,13 @@ void main(string[] args)
 {
     Grammar g;
     // 1. S→A  2. A→B  3. A→AcB  4. B→a  5. B →b 6. B→dD  7. D→Ae
-    // g.addProduction("S", ["A"]);
-    // g.addProduction("A", ["B"]);
-    // g.addProduction("A", ["A", "c", "B"]);
-    // g.addProduction("B", ["a"]);
-    // g.addProduction("B", ["b"]);
-    // g.addProduction("B", ["d", "D"]);
-    // g.addProduction("D", ["A", "e"]);
+    g.addProduction("S", ["A"]);
+    g.addProduction("A", ["B"]);
+    g.addProduction("A", ["A", "c", "B"]);
+    g.addProduction("B", ["a"]);
+    g.addProduction("B", ["b"]);
+    g.addProduction("B", ["d", "D"]);
+    g.addProduction("D", ["A", "e"]);
 
     // Example from wiki
     // https://www.wikiwand.com/en/Wirth%E2%80%93Weber_precedence_relationship#/Examples
@@ -21,14 +21,14 @@ void main(string[] args)
 
     // Example from wiki
     // https://www.wikiwand.com/en/Simple_precedence_parser#/Example
-    g.addProduction("E", ["E", "+", "T'"]);
-    g.addProduction("E", ["T'"]);
-    g.addProduction("T'", ["T"]);
-    g.addProduction("T", ["T", "*", "F"]);
-    g.addProduction("T", ["F"]);
-    g.addProduction("F", ["(", "E'", ")"]);
-    g.addProduction("F", ["num"]);
-    g.addProduction("E'", ["E"]);
+    // g.addProduction("E", ["E", "+", "T'"]);
+    // g.addProduction("E", ["T'"]);
+    // g.addProduction("T'", ["T"]);
+    // g.addProduction("T", ["T", "*", "F"]);
+    // g.addProduction("T", ["F"]);
+    // g.addProduction("F", ["(", "E'", ")"]);
+    // g.addProduction("F", ["num"]);
+    // g.addProduction("E'", ["E"]);
 
 
     import std.stdio;
@@ -151,13 +151,7 @@ bool matchInput(in Grammar g, in PrecedenceTable precedenceTable, ref size_t[] i
 
                 auto prod = prods.front;
                 auto lhsId = prod.lhsId;
-
                 auto relation = precedenceTable[stack.top, lhsId];
-                if (relation == PrecedenceRelationKind.None)
-                {
-                    writeln("Invalid input?");
-                    return false;
-                }
                 precedenceStack.push(relation);
                 stack.push(lhsId);
                 break;
