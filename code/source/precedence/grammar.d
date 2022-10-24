@@ -233,3 +233,84 @@ Nullable!(size_t[]) tokenize(const Grammar g, string input)
     }
     return nullable(tokens[]);
 }
+
+Nullable!Grammar parseGrammarFile(string fileName)
+{
+    import std.stdio;
+    return File(fileName).byLineCopy.parseGrammar;
+}
+
+import std.range;
+
+Nullable!Grammar parseGrammar(TLineRange)(TLineRange lines)
+    if (isInputRange!TLineRange && is(ElementType!TLineRange : string))
+{
+    import std.range;
+    import std.stdio;
+    import std.string;
+    import std.algorithm;
+    import std.uni;
+    
+    Grammar g;
+    bool isGood = true;
+    foreach (lineIndex, line; lines.map!(l => l.strip).enumerate)
+    {
+        void skipWhitespace(T)(ref T range)
+        {
+            while (!range.empty)
+            {
+                if (!isWhite(range.front))
+                    break;
+                range.popFront();
+            }
+        }
+        string input = line;
+        skipWhitespace(input);
+
+        size_t nonTerminalLength = 0;
+        while (nonTerminalLength < input.length
+            && input[nonTerminalLength] != '-'
+            && !isWhite(input[nonTerminalLength]))
+        {
+            nonTerminalLength++;
+        }
+
+        if (nonTerminalLength == 0)
+        {
+            writeln("Terminal expected at ", input, " line ", lineIndex + 1);
+            isGood = false;
+            continue;
+        }
+
+        string lhsSymbol = input[0 .. nonTerminalLength];
+        input = input[nonTerminalLength .. $];
+        skipWhitespace(input);
+
+        if (input.length == 0 || !input.startsWith("-->"))
+        {
+            writeln("Expected an arrow --> at ", input, " ", lineIndex + 1);
+            isGood = false;
+            continue;
+        }
+
+        input = input["-->".length .. $];
+        skipWhitespace(input);
+
+        size_t lhsId = g.addOrGetSymbolId(lhsSymbol);
+        foreach (production; input[]
+            .splitter("|")
+            .map!(p => p.strip
+                .splitter(" ")
+                .map!(s => s.strip)
+                .map!(s => g.addOrGetSymbolId(s))
+                .array))
+        {
+            g.symbols[lhsId].productions ~= Production(production);
+        }
+    }
+
+    if (!isGood)
+        return typeof(return).init;
+
+    return nullable(g);
+}

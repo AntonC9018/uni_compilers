@@ -8,7 +8,7 @@ import pegged.grammar;
 mixin(grammar(`
 NormalizedGrammar:
 	Line		    <  Rules / Comment
-	Rules 	        <  NonTerminal "->" ProductionList
+	Rules 	        <  NonTerminal "-->" ProductionList
 	Comment		    <- "//" ~(.*)
 	ProductionList  <  Production ("|" Production)*
 	NonTerminal     <- ~([A-Z][a-zA-Z_0-9]*)

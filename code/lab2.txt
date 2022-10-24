@@ -1,11 +1,10 @@
-// v=v,v;v=v
-L -> I X | A_v X_1
-X -> A_semicolon L
-I -> A_v X_1
-A -> A_v Y | v
-Y -> A_comma A
-A_v -> v
-A_semicolon -> ;
-A_comma -> ,
-A_equal -> =
-X_1 -> A_equal A
+L --> I X | A_v X_1
+X --> A_semicolon L
+I --> A_v X_1
+A --> A_v Y | v
+Y --> A_comma A
+A_v --> v
+A_semicolon --> ;
+A_comma --> ,
+A_equal --> =
+X_1 --> A_equal A

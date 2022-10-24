@@ -2,38 +2,71 @@ module app;
 
 import precedence.grammar;
 
+import std.stdio;
+import std.algorithm;
+import std.range;
+
 void main(string[] args)
 {
+    if (args.length == 1)
+    {
+        writeln("Usage: ", args[0], " grammar");
+        writeln("grammar can be a path to a grammar text file, or one of the following: ",
+            "lab3-example, wiki-example-1", "wiki-example-2");
+        writeln("Example grammar file:");
+        writeln("A --> a B c | D e F");
+        writeln("B --> D | c");
+        writeln("F --> a");
+        return;
+    }
+
     Grammar g;
-    // 1. S→A  2. A→B  3. A→AcB  4. B→a  5. B →b 6. B→dD  7. D→Ae
-    g.addProduction("S", ["A"]);
-    g.addProduction("A", ["B"]);
-    g.addProduction("A", ["A", "c", "B"]);
-    g.addProduction("B", ["a"]);
-    g.addProduction("B", ["b"]);
-    g.addProduction("B", ["d", "D"]);
-    g.addProduction("D", ["A", "e"]);
-
-    // Example from wiki
-    // https://www.wikiwand.com/en/Wirth%E2%80%93Weber_precedence_relationship#/Examples
-    // g.addProduction("S", ["a", "S", "S", "b"]);
-    // g.addProduction("S", ["c"]);
-
-    // Example from wiki
-    // https://www.wikiwand.com/en/Simple_precedence_parser#/Example
-    // g.addProduction("E", ["E", "+", "T'"]);
-    // g.addProduction("E", ["T'"]);
-    // g.addProduction("T'", ["T"]);
-    // g.addProduction("T", ["T", "*", "F"]);
-    // g.addProduction("T", ["F"]);
-    // g.addProduction("F", ["(", "E'", ")"]);
-    // g.addProduction("F", ["num"]);
-    // g.addProduction("E'", ["E"]);
-
-
-    import std.stdio;
-    import std.algorithm;
-    import std.range;
+    string grammarPath = args[1];
+    switch (grammarPath)
+    {
+        case "lab3-example":
+        {
+            // 1. S→A  2. A→B  3. A→AcB  4. B→a  5. B →b 6. B→dD  7. D→Ae
+            g.addProduction("S", ["A"]);
+            g.addProduction("A", ["B"]);
+            g.addProduction("A", ["A", "c", "B"]);
+            g.addProduction("B", ["a"]);
+            g.addProduction("B", ["b"]);
+            g.addProduction("B", ["d", "D"]);
+            g.addProduction("D", ["A", "e"]);
+            break;
+        }
+        case "wiki-example-1":
+        {
+            // Example from wiki
+            // https://www.wikiwand.com/en/Wirth%E2%80%93Weber_precedence_relationship#/Examples
+            g.addProduction("S", ["a", "S", "S", "b"]);
+            g.addProduction("S", ["c"]);
+            break;
+        }
+        case "wiki-example-2":
+        {
+            // Example from wiki
+            // https://www.wikiwand.com/en/Simple_precedence_parser#/Example
+            g.addProduction("E", ["E", "+", "T'"]);
+            g.addProduction("E", ["T'"]);
+            g.addProduction("T'", ["T"]);
+            g.addProduction("T", ["T", "*", "F"]);
+            g.addProduction("T", ["F"]);
+            g.addProduction("F", ["(", "E'", ")"]);
+            g.addProduction("F", ["num"]);
+            g.addProduction("E'", ["E"]);
+            break;
+        }
+        default:
+        {
+            auto maybeGrammar = parseGrammarFile(grammarPath);
+            if (maybeGrammar.isNull)
+                return;
+            g = maybeGrammar.get();
+            break;
+        }
+    }
     
     bool hasEpsilonProductions = g.checkForEpsilonProductions();
     bool hasUnreachableSymbols = g.checkForUnreachableSymbols();
@@ -196,7 +229,8 @@ auto getPrecedenceTable(in Grammar g, in OperationTable headTable, in OperationT
             return;
 
         isGood = false;
-        writeln(g.symbols[i].name, " and ", g.symbols[j].name, " have ambiguous precedence relation of ", value, " and ", *p);
+        writeln(g.symbols[i].name, " and ", g.symbols[j].name, " have ambiguous precedence relation of ",
+            getPrecedenceRelationString(value), " and ", getPrecedenceRelationString(*p));
         writeProductions(stdout.lockingTextWriter, g, i);
         writeProductions(stdout.lockingTextWriter, g, j);
     }

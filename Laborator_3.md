@@ -21,7 +21,7 @@ Să se construiască matricea relaţiilor de precedenţă şi să se analizeze �
 
 ## Realizarea
 
-Rulez programul meu la această gramatică:
+Rulez [programul meu](https://github.com/AntonC9018/uni_compilers/blob/5566defe6a0f04e0e39c6494df36b4de62af33d0/code/source/precedence/app.d) la această gramatică:
 
 ```
 S --> A                          
@@ -50,7 +50,7 @@ Tail(b) = {}
 Tail(d) = {}                     
 Tail(D) = {e}                    
 Tail(e) = {}
-                     
+
   | S| A| B| c| a| b| d| D| e| $ 
  S|  |  |  |  |  |  |  |  |  |   
  A|  |  |  | =|  |  |  |  | =| > 
