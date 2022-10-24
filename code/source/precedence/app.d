@@ -148,6 +148,9 @@ bool matchInput(in Grammar g, in PrecedenceTable precedenceTable, ref size_t[] i
         PrecedenceRelationKind relationKind = precedenceTable[stack.top, fid];
         final switch (relationKind)
         {
+            case PrecedenceRelationKind.Conflict:
+                assert(false, "Invalid precedence table.");
+                
             case PrecedenceRelationKind.None:
             {
                 writeln("Precedence relation none, shouldn't happen. Probably input doesn't match.");
@@ -161,7 +164,6 @@ bool matchInput(in Grammar g, in PrecedenceTable precedenceTable, ref size_t[] i
                 input.popFront();
                 break;
             }
-
             case PrecedenceRelationKind.DotGreater:
             {
                 auto t = precedenceStack[].retro.countUntil!(k => k == PrecedenceRelationKind.DotLess);
@@ -199,6 +201,7 @@ enum PrecedenceRelationKind
     DotEqual,
     DotLess,
     DotGreater,
+    Conflict,
 }
 
 string getPrecedenceSymbolName(in Grammar g, size_t i)
@@ -233,6 +236,8 @@ auto getPrecedenceTable(in Grammar g, in OperationTable headTable, in OperationT
             getPrecedenceRelationString(value), " and ", getPrecedenceRelationString(*p));
         writeProductions(stdout.lockingTextWriter, g, i);
         writeProductions(stdout.lockingTextWriter, g, j);
+
+        *p = PrecedenceRelationKind.Conflict;
     }
 
     foreach (p; g.productions)
@@ -282,6 +287,8 @@ string getPrecedenceRelationString(PrecedenceRelationKind kind)
             return "<";
         case PrecedenceRelationKind.None:
             return " ";
+        case PrecedenceRelationKind.Conflict:
+            return "?";
     }
 }
 
