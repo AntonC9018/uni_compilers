@@ -11,6 +11,16 @@
 	"targetType": "executable",
 	"configurations": [
 		{
+			"name": "ll1",
+			"dependencies":
+			{
+				"mir-algorithm": "~>2.0.0"
+			},
+			"sourcePaths": [
+				"source/ll1"
+			] 
+		},
+		{
 			"name": "precedence",
 			"dependencies":
 			{

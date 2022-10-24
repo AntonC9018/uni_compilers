@@ -1,6 +1,7 @@
 module app;
 
-import precedence.grammar;
+import sharedd.grammar;
+import sharedd.parsing;
 
 import std.stdio;
 import std.algorithm;
@@ -72,8 +73,8 @@ void main(string[] args)
     bool hasUnreachableSymbols = g.checkForUnreachableSymbols();
     bool hasUnproductiveSymbols = g.checkForUnproductiveSymbols();
 
-    auto headTable = makeOperationTable!(rhsIds => rhsIds[0])(g);
-    auto tailTable = makeOperationTable!(rhsIds => rhsIds[$ - 1])(g);
+    auto headTable = g.makeNoEpsilonOperationTable!(rhsIds => rhsIds[0]);
+    auto tailTable = g.makeNoEpsilonOperationTable!(rhsIds => rhsIds[$ - 1]);
 
     foreach (p; g.productions)
         writeProduction(stdout.lockingTextWriter, g, p.lhsId, p.rhsIds);
@@ -150,7 +151,7 @@ bool matchInput(in Grammar g, in PrecedenceTable precedenceTable, ref size_t[] i
         {
             case PrecedenceRelationKind.Conflict:
                 assert(false, "Invalid precedence table.");
-                
+
             case PrecedenceRelationKind.None:
             {
                 writeln("Precedence relation none, shouldn't happen. Probably input doesn't match.");
@@ -317,64 +318,7 @@ void writePrecedenceTable(TWriter)(auto ref TWriter w, in Grammar g, PrecedenceT
     w.put("\n");
 }
 
-static struct OperationTable
-{
-    import std.bitmanip;
-    size_t[] _memory;
-    size_t _dimensionBits;
-    size_t _dimensionSizeTs;
-
-    // this(size_t[] memory, size_t dimensionBits)
-    // {
-    //     import std.algorithm;
-    //     _memory = memory;
-    //     _dimensionBits = dimensionBits;
-    // }
-
-    this(size_t dimensionBits, size_t numRows)
-    {
-        import std.algorithm;
-        import sharedd.helper;
-        _dimensionSizeTs = ceilDivide(dimensionBits, 8 * size_t.sizeof);
-        _memory = new size_t[](_dimensionSizeTs * numRows);
-        _dimensionBits = dimensionBits;
-    }
-    
-    inout(size_t[]) getSlice(size_t id) inout
-    {
-        return _memory[id * _dimensionSizeTs .. (id + 1) * _dimensionSizeTs];
-    }
-
-    inout(BitArray) getBitArray(size_t id) inout
-    {
-        return inout(BitArray)(cast(void[]) getSlice(id), _dimensionBits);
-    }
-
-    auto iterate(size_t id) inout
-    {
-        import core.bitop;
-        return BitRange(getSlice(id).ptr, _dimensionBits);
-    }
-
-    void writeTo(TWriter)(auto ref TWriter w, in Grammar g, string funcName)
-    {
-        import std.format.write;
-        import std.range;
-        foreach (i, s; g.symbols)
-        {
-            w.formattedWrite!"%s(%s) = {"(funcName, s.name);
-            foreach (index, j; getBitArray(i).bitsSet.enumerate)
-            {
-                if (index != 0)
-                    w.put(", ");
-                w.put(g.symbols[j].name);
-            }
-            w.put("}\n");
-        }
-    }
-}
-
-static OperationTable makeOperationTable(alias getRhsElementOperation)(in Grammar g)
+OperationTable makeNoEpsilonOperationTable(alias getRhsElementOperation)(in Grammar g)
 {
     auto resultTable = OperationTable(g.symbols.length, g.symbols.length);
 
@@ -398,7 +342,7 @@ static OperationTable makeOperationTable(alias getRhsElementOperation)(in Gramma
         
         foreach (p; g.symbols[t].productions)
         {
-            auto h = getRhsElementOperation(p.rhsIds);
+            size_t h = getRhsElementOperation(p.rhsIds);
             tempArray1[h] = true;
             tempBuffer1[] |= resultTable.getSlice(h)[];
         }

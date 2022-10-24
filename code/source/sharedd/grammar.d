@@ -1,4 +1,4 @@
-module precedence.grammar;
+module sharedd.grammar;
 
 struct Production
 {
@@ -42,6 +42,17 @@ struct Grammar
             .enumerate
             .filter!(t => t.value.isTerminal)
             .map!(t => tuple!("index", "name")(t.index, t.value.name));
+    }
+
+    auto nonTerminals(this This)()
+    {
+        import std.range;
+        import std.algorithm;
+        import std.typecons;
+        return symbols[]
+            .enumerate
+            .filter!(t => !t.value.isTerminal)
+            .map!(t => tuple!("index", "productions")(t.index, t.value.productions));
     }
 
     enum size_t initialSymbolId = 0;
@@ -92,7 +103,9 @@ void addProduction(ref Grammar g, string lhs, scope const(string)[] rhs)
     addProduction(g, g.addOrGetSymbolId(lhs), rhs);
 }
 
-bool checkForEpsilonProductions(in Grammar g)
+import std.stdio;
+
+bool checkForEpsilonProductions(alias errorHandler = writeln)(in Grammar g)
 {
     bool isBad = false;
     foreach (s; g.symbols)
@@ -100,16 +113,15 @@ bool checkForEpsilonProductions(in Grammar g)
     {
         if (p.rhsIds.length == 0)
         {
-            import std.stdio;
             isBad = true;
-            writeln("Epsilon productions are not allowed, at ", 
+            errorHandler("Epsilon productions are not allowed, at ", 
                 s.name, " --> eps");
         }
     }
     return isBad;
 }
 
-bool checkForUnreachableSymbols(in Grammar g)
+bool checkForUnreachableSymbols(alias errorHandler = writeln)(in Grammar g)
 {
     // NOTE: bitSlice is kinda bad, should use core.bitop
     import mir.ndslice;
@@ -139,7 +151,7 @@ bool checkForUnreachableSymbols(in Grammar g)
     {
         if (!met)
         {
-            writeln("Symbol ", g.symbols[index].name, " is unreachable.");
+            errorHandler("Symbol ", g.symbols[index].name, " is unreachable.");
             isBad = true;
         }
     }
@@ -147,7 +159,7 @@ bool checkForUnreachableSymbols(in Grammar g)
 }
 
 
-bool checkForUnproductiveSymbols(in Grammar g)
+bool checkForUnproductiveSymbols(alias errorHandler = writeln)(in Grammar g)
 {
     // NOTE: bitSlice is kinda bad, should use core.bitop
     import mir.ndslice;
@@ -192,7 +204,7 @@ bool checkForUnproductiveSymbols(in Grammar g)
     {
         if (!met)
         {
-            writeln("Symbol ", g.symbols[index].name, " is unproductive.");
+            errorHandler("Symbol ", g.symbols[index].name, " is unproductive.");
             isBad = true;
         }
     }
@@ -255,6 +267,9 @@ Nullable!Grammar parseGrammar(TLineRange)(TLineRange lines)
     bool isGood = true;
     foreach (lineIndex, line; lines.map!(l => l.strip).enumerate)
     {
+        if (line.startsWith("//"))
+            continue;
+
         void skipWhitespace(T)(ref T range)
         {
             while (!range.empty)
@@ -308,6 +323,11 @@ Nullable!Grammar parseGrammar(TLineRange)(TLineRange lines)
             g.symbols[lhsId].productions ~= Production(production);
         }
     }
+
+    // // The epsilon is not implicitly defined.
+    // auto epsIndex = g.symbols[].countUntil!(s => s.name == "eps");
+    // if (epsIndex != -1)
+    //     g.symbols[epsIndex].productions ~= [];
 
     if (!isGood)
         return typeof(return).init;
