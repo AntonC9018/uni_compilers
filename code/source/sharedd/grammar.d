@@ -87,15 +87,30 @@ void writeProduction(TWriter)(auto ref TWriter w, in Grammar g, size_t lhs, scop
     import std.format.write;
     w.put(g.symbols[lhs].name);
     w.put(" --> ");
-    foreach (s; rhs)
+    foreach (i, s; rhs)
+    {
         w.put(g.symbols[s].name);
-    w.put("\n");
+        if (i != rhs.length - 1)
+            w.put(' ');
+    }
 }
 
 void writeProductions(TWriter)(auto ref TWriter w, in Grammar g, size_t lhs)
 {
     foreach (p1; g.symbols[lhs].productions)
+    {
         writeProduction(w, g, lhs, p1.rhsIds);
+        w.put("\n");
+    }
+}
+
+void writeProductions(TWriter)(auto ref TWriter w, in Grammar g)
+{
+    foreach (p1; g.productions)
+    {
+        writeProduction(w, g, p1.lhsId, p1.rhsIds);
+        w.put("\n");
+    }
 }
 
 void addProduction(ref Grammar g, string lhs, scope const(string)[] rhs)

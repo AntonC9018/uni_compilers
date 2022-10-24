@@ -45,13 +45,12 @@ void main(string[] args)
     auto headTable = makeEpsilonOperationTable!HeadDirection(g, epsilonId);
     auto tailTable = makeEpsilonOperationTable!TailDirection(g, epsilonId);
     
-    foreach (p; g.productions)
-        writeProduction(stdout.lockingTextWriter, g, p.lhsId, p.rhsIds);
+    writeProductions(stdout.lockingTextWriter, g);
     headTable.writeTo(stdout.lockingTextWriter, g, "Head");
     tailTable.writeTo(stdout.lockingTextWriter, g, "Tail");
 
     {
-        import mir.ndslice;
+        import mir.ndslice : slice;
         size_t eofId = g.symbols.length;
         size_t numSymbols = g.symbols.length + 1;
         auto table = slice!size_t(numSymbols, numSymbols);
@@ -95,24 +94,89 @@ void main(string[] args)
         {
             foreach (productionIndex, production; lhsSymbol.productions)
             {
-                // foreach (rhsId; production.rhsIds)
-                // {
-                //     if (g.symbols[rhsId].isTerminal)
-                //     {
-                //         if (headTable.getBitArray(lhsId)[rhsId])
-                //             assignMaybeError(lhsId, rhsId, productionIndex);
-                //         continue;
-                //     }
-                //     if (headTable.getBitArray(rhsId)[epsilonId])
-                //     {
-                //     }
+                auto rhsIds = production.rhsIds;
+
+                if (rhsIds == [epsilonId])
+                {
+                    foreach (tailId; tailTable.iterate(lhsId))
+                    {
+                        if (g.symbols[tailId].isTerminal)
+                            assignMaybeError(lhsId, tailId != epsilonId ? tailId : eofId, productionIndex);
+                    }
+                    continue;
+                }
+                else
+                {
+                    size_t rhsIndex = 0;
                     
-                //     if (bt[epsilonId])
-                //     {
-                        
-                //     }
-                // }
+                    import std.bitmanip;
+                    BitArray bt;
+                    do
+                    {
+                        bt = headTable.getBitArray(rhsIds[rhsIndex]);
+                        foreach (headId; bt.bitsSet)
+                        {
+                            if (g.symbols[headId].isTerminal
+                                && headId != epsilonId)
+                            {
+                                assignMaybeError(lhsId, headId, productionIndex);
+                            }
+                        }
+                        if (rhsIndex >= rhsIds.length - 1)
+                            break;
+                        rhsIndex += 1;
+                    }
+                    while (bt[epsilonId]);
+                }
             }
+        }
+
+        import std.algorithm;
+        auto terminalColumns = iota(0, numSymbols)
+            .filter!((icol)
+            {
+                if (icol == eofId)
+                    return true;
+                if (!g.symbols[icol].isTerminal)
+                    return false;
+                if (icol == epsilonId)
+                    return false;
+                return true;
+            });
+
+        auto nonTerminalRows = iota(0, g.symbols.length)
+            .filter!(i => !g.symbols[i].isTerminal);
+
+        import std.range;
+        auto strings = g.symbols[].enumerate.map!((s)
+        {
+            return s.value.productions.map!((p)
+            {
+                auto app = appender!string;
+                writeProduction(app, g, s.index, p.rhsIds);
+                return app[];
+            }).array;
+        }).array;
+
+        size_t cellWidth = strings.joiner.map!(s => s.length).maxElement;
+        size_t leftWidth = nonTerminalRows.map!(sid => g.symbols[sid].name.length).maxElement;
+
+        write(' '.repeat(leftWidth));
+        foreach (s; terminalColumns.map!(i => getPrecedenceSymbolName(g, i)))
+            writef!"|%*s"(cellWidth, s);
+        writeln();
+        foreach (irow; nonTerminalRows)
+        {
+            writef!"%*s"(leftWidth, g.symbols[irow].name);
+            foreach (icol; terminalColumns)
+            {
+                const v = table[irow, icol];
+                if (v == size_t.max)
+                    write("|", ' '.repeat(cellWidth));
+                else
+                    writef!"|%*s"(cellWidth, strings[irow][v]);
+            }
+            writeln();
         }
     }
 }
@@ -174,7 +238,7 @@ OperationTable makeEpsilonOperationTable(int direction)(in Grammar g, size_t eps
                 // Went off the array
                 if (direction == 1
                     ? (h >= g.symbols.length - direction)
-                    : (h < direction))
+                    : (h < -direction))
                 {
                     tempArray1[epsilonSymbolId] = true;
                     continue productionLoop;
@@ -200,4 +264,12 @@ OperationTable makeEpsilonOperationTable(int direction)(in Grammar g, size_t eps
     }
 
     return resultTable;
+}
+
+string getPrecedenceSymbolName(in Grammar g, size_t i)
+{
+    if (i == g.symbols.length)
+        return "$";
+    else
+        return g.symbols[i].name;
 }
