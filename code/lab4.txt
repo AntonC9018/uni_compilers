@@ -1,5 +1,5 @@
 S --> A
-A --> B | A c B
+A --> B | c B B
 B --> a | b | d D
 D --> A e
 // S --> A

@@ -9,7 +9,8 @@ Varianta: *5*.
 
 ## Sarcina
 
-Fie gramatica independentă de context 
+Fie gramatica independentă de context
+
 $ G = (V_N, V_T, P, S), V_N = \\{S, A, B, D \\}, V_T = \\{a,b,c,d\\} \\
 \begin{cases}
 S \rightarrow A \\\\
@@ -17,6 +18,7 @@ A \rightarrow B | AcB \\\\
 B \rightarrow a | b | dB \\\\
 D \rightarrow Ae \\\\
 \end{cases} $
+
 Să se construiască matricea relaţiilor de precedenţă şi să se analizeze şirul *dacbcbeca*.
 
 ## Realizarea

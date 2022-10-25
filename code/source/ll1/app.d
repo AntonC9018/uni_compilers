@@ -66,15 +66,40 @@ void main(string[] args)
             SyntaxTree syntaxTree = matchInput(g, *ll1, input);
             foreach (index, node; syntaxTree.nodes)
             {
-                if (node.children.length == 0)
-                    continue;
-                write("A", index, " --> ");
-                foreach (childIndex, childId; node.children)
+                write("A", index, "(\"", g.symbols[node.symbolId].name, "\")");
+                if (node.children.length > 0)
                 {
-                    write("A", childId);
-                    if (childIndex != node.children.length)
-                        write(", ");
+                    write(" --> ");
+                    foreach (childIndex, childId; node.children)
+                    {
+                        write("A", childId);
+                        if (childIndex != node.children.length - 1)
+                            write(" & ");
+                    }
                 }
+                writeln();
+            }
+            {
+                void printTree(const(SyntaxNode)* node, string indentation)
+                {
+                    auto symbol = g.symbols[node.symbolId];
+                    write(indentation);
+                    write(symbol.name);
+                    if (node.productionIndex != SpecialProduction.none)
+                    {
+                        write(" matched production: ");
+                        writeEpsilonProduction(g, node.symbolId, node.productionIndex);
+                    }
+                    else
+                    {
+                        writeln();
+                    }
+                    indentation ~= "  ";
+                    foreach (size_t childIndex; node.children)
+                        printTree(&syntaxTree.nodes[childIndex], indentation);
+                }
+
+                printTree(syntaxTree.root, "");
                 writeln();
             }
         }
@@ -131,7 +156,7 @@ SyntaxTree matchInput(in Grammar g, in LL1Table ll1, const(size_t)[] input)
     static struct StackItem
     {
         size_t symbolId;
-        size_t nodeIndex;
+        size_t nodeId;
     }
 
     Stack!StackItem stack;
@@ -145,10 +170,17 @@ SyntaxTree matchInput(in Grammar g, in LL1Table ll1, const(size_t)[] input)
     }
     // auto appliedRules = appender!(RuleApplication[]);
 
+    writeln(padRight("Stack", ' ', 50), "  ", padRight("Input", ' ', 50));
     while (!input.empty)
     {
+        {
+            import std.string;
+            auto i = input[].map!(i => g.getPrecedenceSymbolName(i)).joiner(" ");
+            auto s = stack[].map!(s => getPrecedenceSymbolName(g, s.symbolId)).joiner(" ");
+            writeln(padRight(s, ' ', 50), "  ", padRight(i, ' ', 50));
+        }
         size_t token = input.front;
-        auto top = stack.top;
+        auto top = stack.pop();
         if (top.symbolId == token)
         {
             input.popFront();
@@ -158,13 +190,11 @@ SyntaxTree matchInput(in Grammar g, in LL1Table ll1, const(size_t)[] input)
         auto symbol = g.symbols[top.symbolId];
         if (symbol.isTerminal)
         {
-            writeln("Unexpected symbol ", symbol.name);
+            writeln("Unexpected symbol '", g.symbols[token].name,
+                "' while expecting a '", symbol.name, "'");
             return syntaxTree;
         }
         
-        stack.pop();
-        input.popFront();
-
         ssize_t productionIndex = ll1.table[g.getNonTerminalIndex(top.symbolId), g.getTerminalIndex(token)];
         switch (productionIndex)
         {
@@ -180,7 +210,7 @@ SyntaxTree matchInput(in Grammar g, in LL1Table ll1, const(size_t)[] input)
             default:
             {
                 auto production = symbol.productions[productionIndex];
-                auto childNodeIds = syntaxTree.addNodes(top.symbolId, productionIndex, production.rhsIds);
+                auto childNodeIds = syntaxTree.addNodes(top.nodeId, productionIndex, production.rhsIds);
 
                 foreach (rhsId, childNodeId; production.rhsIds[].zip(childNodeIds[]).retro)
                     stack.push(StackItem(rhsId, childNodeId));
@@ -441,21 +471,8 @@ auto buildLL1Table(TWriter)(
             errorHandler.put("This grammar is not an LL(1) grammar: Rule collision:\n");
 
             import std.format;
-            void writeProdEpsilon(ssize_t productionIndex)
-            {
-                if (productionIndex == SpecialProduction.epsilon)
-                {
-                    errorHandler.formattedWrite!"%s --> eps"(g.symbols[lhsId].name);
-                }
-                else
-                {
-                    const(size_t)[] rhsIds = productions[productionIndex].rhsIds;
-                    writeProduction(errorHandler, g, lhsId, rhsIds);
-                    errorHandler.put("\n");
-                }
-            }
-            writeProdEpsilon(productionIndex);
-            writeProdEpsilon(*indexInTable);
+            writeEpsilonProduction(g, lhsId, productionIndex, errorHandler);
+            writeEpsilonProduction(g, lhsId, *indexInTable, errorHandler);
             isError = true;
         }
     }
@@ -547,4 +564,25 @@ void writeLL1Table(in Grammar g, in LL1Table ll1)
         }
         writeln();
     }
+}
+
+
+void writeEpsilonProduction(TWriter)(
+    in Grammar g,
+    size_t lhsId,
+    ssize_t productionIndex,
+    auto ref TWriter w = stdout.lockingTextWriter)
+{
+    import std.format;
+    auto productions = g.symbols[lhsId].productions;
+    if (productionIndex == SpecialProduction.epsilon)
+    {
+        w.formattedWrite!"%s --> eps"(g.symbols[lhsId].name);
+    }
+    else
+    {
+        const(size_t)[] rhsIds = productions[productionIndex].rhsIds;
+        writeProduction(w, g, lhsId, rhsIds);
+    }
+    w.put("\n");
 }
