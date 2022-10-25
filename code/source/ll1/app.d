@@ -1,6 +1,7 @@
 module ll1.app;
 
 import sharedd.grammar;
+import sharedd.helper;
 
 import std.stdio;
 import std.algorithm;
@@ -18,59 +19,49 @@ void main(string[] args)
         return;
     }
 
-    Grammar g;
-    {
-        string grammarPath = args[1];
-        auto maybeGrammar = parseGrammarFile(grammarPath);
-        if (maybeGrammar.isNull)
-            return;
-        g = maybeGrammar.get();
-    }
-
-    auto epsilonId = addOrGetSymbolId(g, "eps");
-    // if (g.symbols[]
-    //     .map!(s => s.productions)
-    //     .joiner
-    //     .map!(p => p.stride(2))
-    //     .any!(a => a[0] == a[1] && a[0] == epsilonId))
-    if (g.productions
-        .map!(p => p.rhsIds)
-        .any!((rhsIds) => rhsIds.length > 1
-            && rhsIds[].count(epsilonId) != 0))
-    {
-        writeln("If a production contains an epsilon, it must be the only symbol.");
+    string grammarPath = args[1];
+    auto maybeGrammarBuilder = parseGrammarFile(grammarPath);
+    if (maybeGrammarBuilder.isNull)
         return;
-    }
+    auto grammarBuilder = maybeGrammarBuilder.get();
+    bool addEpsilon = true;
+    auto maybeGrammar = grammarBuilder.build(addEpsilon);
+    if (maybeGrammar.isNull)
+        return;
+    const(Grammar) g = maybeGrammar.get();
+    
+    auto firstTable = makeFirstTable(g);
 
-    auto headTable = makeEpsilonOperationTable!HeadDirection(g, epsilonId);
-    auto tailTable = makeEpsilonOperationTable!TailDirection(g, epsilonId);
+    // This is not ideal, might alocate a few more size_t's than necessary.
+    size_t[] tokenMask = bitMemory(g.symbols.length);
+    setBitRange(tokenMask, g.numNonTerminals, g.symbols.length, true);
+    auto followTable = makeFollowTable(g, firstTable, tokenMask);
     
     writeProductions(stdout.lockingTextWriter, g);
-    headTable.writeTo(stdout.lockingTextWriter, g, "Head");
-    tailTable.writeTo(stdout.lockingTextWriter, g, "Tail");
+    firstTable.writeTo(stdout.lockingTextWriter, g, "First");
+    followTable.writeTo(stdout.lockingTextWriter, i => getPrecedenceSymbolName(g, i), "Follow");
 
     {
         import mir.ndslice : slice;
-        size_t eofId = g.symbols.length;
-        size_t numSymbols = g.symbols.length + 1;
-        auto table = slice!size_t(numSymbols, numSymbols);
-        table[] = size_t.max;
+        const eofIdInFollowTable = g.symbols.length;
+        const size_t tableEofIndex = g.epsilonId;
+        const ssize_t none = -1;
+        const ssize_t epsilon = -2;
+        auto table = slice!ssize_t(g.numNonTerminals, g.numTerminals);
+        table[] = none;
 
-        // foreach (sid, s; g.nonTerminals)
-        // {
-        //     foreach (terminalId; headTable
-        //         .iterate(sid)
-        //         .filter!(id => g.symbols[id].isTerminal)) 
-        //     {
-        //         if (terminalId != epsilonId)
-        //             table[sid, terminalId]
-        //     }
-        // }
         bool isError = false;
         void assignMaybeError(size_t lhsId, size_t rhsId, size_t productionIndex)
         {
-            size_t* indexInTable = &table[lhsId, rhsId];
-            if (*indexInTable == size_t.max)
+            size_t rhsIndex;
+            // $ = epsilon? still not sure.
+            // if (rhsId == eofIdInFollowTable)
+            //     rhsId = g.epsilonId;
+            // else
+                rhsIndex = g.getTerminalIndex(rhsId);
+            
+            ssize_t* indexInTable = &table[lhsId, rhsIndex];
+            if (*indexInTable == none)
             {
                 *indexInTable = productionIndex;
                 return;
@@ -78,74 +69,70 @@ void main(string[] args)
             if (*indexInTable == productionIndex)
                 return;
 
+            auto productions = g.symbols[lhsId].productions;
+            if (productionIndex == epsilon
+                && productions[*indexInTable].rhsIds == [g.epsilonId])
+            {
+                return;
+            }
+            if (*indexInTable == epsilon
+                && productions[productionIndex].rhsIds == [g.epsilonId])
+            {
+                *indexInTable = productionIndex;
+                return;
+            }
+
             {
                 writeln("This grammar is not an LL(1) grammar: Rule collision:");
-                auto productions = g.symbols[lhsId].productions;
-                const(size_t)[] rhsIds = productions[productionIndex].rhsIds;
-                writeProduction(stdout.lockingTextWriter, g, lhsId, rhsIds);
 
-                auto p0 = productions[*indexInTable];
-                writeProduction(stdout.lockingTextWriter, g, lhsId, p0.rhsIds);
+                void writeProdEpsilon(ssize_t productionIndex)
+                {
+                    if (productionIndex == epsilon)
+                    {
+                        writeln(g.symbols[lhsId].name, " --> eps");
+                    }
+                    else
+                    {
+                        const(size_t)[] rhsIds = productions[productionIndex].rhsIds;
+                        writeProduction(stdout.lockingTextWriter, g, lhsId, rhsIds);
+                        writeln();
+                    }
+                }
+                writeProdEpsilon(productionIndex);
+                writeProdEpsilon(*indexInTable);
                 isError = true;
             }
         }
+
+        size_t[] temp = bitMemory(g.symbols.length + 1);
 
         foreach (lhsId, lhsSymbol; g.symbols)
         {
             foreach (productionIndex, production; lhsSymbol.productions)
             {
                 auto rhsIds = production.rhsIds;
+                auto rhsFirst = firstTable.getSlice(rhsIds[0]);
+                auto followA = followTable.getSlice(lhsId);
 
-                if (rhsIds == [epsilonId])
+                temp[] = rhsFirst[] & tokenMask[];
+                foreach (terminalId; iterateSetBits(temp, g.symbols.length))
+                    assignMaybeError(lhsId, terminalId, productionIndex);
+
+                if (getBit(rhsFirst, g.epsilonId))
                 {
-                    foreach (tailId; tailTable.iterate(lhsId))
-                    {
-                        if (g.symbols[tailId].isTerminal)
-                            assignMaybeError(lhsId, tailId != epsilonId ? tailId : eofId, productionIndex);
-                    }
-                    continue;
-                }
-                else
-                {
-                    size_t rhsIndex = 0;
-                    
-                    import std.bitmanip;
-                    BitArray bt;
-                    do
-                    {
-                        bt = headTable.getBitArray(rhsIds[rhsIndex]);
-                        foreach (headId; bt.bitsSet)
-                        {
-                            if (g.symbols[headId].isTerminal
-                                && headId != epsilonId)
-                            {
-                                assignMaybeError(lhsId, headId, productionIndex);
-                            }
-                        }
-                        if (rhsIndex >= rhsIds.length - 1)
-                            break;
-                        rhsIndex += 1;
-                    }
-                    while (bt[epsilonId]);
+                    temp[] = followA[] & tokenMask[];
+                    foreach (terminalId; iterateSetBits(temp, g.symbols.length))
+                        assignMaybeError(lhsId, terminalId, epsilon);
+
+                    if (getBit(followA, eofIdInFollowTable))
+                        assignMaybeError(lhsId, tableEofIndex, epsilon);
                 }
             }
         }
 
         import std.algorithm;
-        auto terminalColumns = iota(0, numSymbols)
-            .filter!((icol)
-            {
-                if (icol == eofId)
-                    return true;
-                if (!g.symbols[icol].isTerminal)
-                    return false;
-                if (icol == epsilonId)
-                    return false;
-                return true;
-            });
-
-        auto nonTerminalRows = iota(0, g.symbols.length)
-            .filter!(i => !g.symbols[i].isTerminal);
+        auto terminalColumns = g.iterateTerminals;
+        auto nonTerminalRows = g.nonTerminals;
 
         import std.range;
         auto strings = g.symbols[].enumerate.map!((s)
@@ -159,22 +146,36 @@ void main(string[] args)
         }).array;
 
         size_t cellWidth = strings.joiner.map!(s => s.length).maxElement;
-        size_t leftWidth = nonTerminalRows.map!(sid => g.symbols[sid].name.length).maxElement;
+        size_t leftWidth = nonTerminalRows.map!(s => s.name.length).maxElement;
 
         write(' '.repeat(leftWidth));
-        foreach (s; terminalColumns.map!(i => getPrecedenceSymbolName(g, i)))
+        foreach (s; terminalColumns.map!(t => t.id == tableEofIndex ? "$" : t.name))
             writef!"|%*s"(cellWidth, s);
         writeln();
-        foreach (irow; nonTerminalRows)
+        foreach (irow, s; nonTerminalRows.enumerate)
         {
-            writef!"%*s"(leftWidth, g.symbols[irow].name);
-            foreach (icol; terminalColumns)
+            writef!"%*s"(leftWidth, s.name);
+            foreach (icol, t; terminalColumns.enumerate)
             {
                 const v = table[irow, icol];
-                if (v == size_t.max)
-                    write("|", ' '.repeat(cellWidth));
-                else
-                    writef!"|%*s"(cellWidth, strings[irow][v]);
+                switch (v)
+                {
+                    case none:
+                    {
+                        write("|", ' '.repeat(cellWidth));
+                        break;
+                    }
+                    case epsilon:
+                    {
+                        writef!"|%*s"(cellWidth, g.symbols[irow].name ~ " --> eps");
+                        break;
+                    }
+                    default:
+                    {
+                        writef!"|%*s"(cellWidth, strings[irow][v]);
+                        break;
+                    }
+                }
             }
             writeln();
         }
@@ -186,19 +187,87 @@ enum int TailDirection = -1;
 
 import sharedd.parsing;
 
-OperationTable makeEpsilonOperationTable(int direction)(in Grammar g, size_t epsilonSymbolId)
+OperationTable makeFirstTable(in Grammar g)
 {
-    static assert(direction == 1 || direction == -1);
-
     const numSymbols = g.symbols.length;
 
-    assert(g.symbols[epsilonSymbolId].isTerminal);
+    auto resultTable = OperationTable(numSymbols, numSymbols);
+    auto temp = bitMemory(numSymbols);
 
+    import std.container : DList;
+    auto queue = DList!size_t();
+    foreach (i, s; g.symbols)
+    {
+        if (!s.isTerminal)
+            queue ~= i;
+        else
+            resultTable.getBitArray(i)[i] = true;
+    } 
+
+    while (!queue.empty)
+    {
+        size_t t = queue.front;
+        queue.removeFront();
+        temp[] = 0;
+
+        productionLoop: foreach (p; g.symbols[t].productions)
+        {
+            size_t h = p.rhsIds[0];
+
+            import std.bitmanip;
+            if (g.hasEpsilon)
+            {
+                if (p.rhsIds.length == 1 && h == g.epsilonId)
+                {
+                    setBit(temp, g.epsilonId);
+                    continue;
+                }
+
+                BitArray other;
+                while ((other = resultTable.getBitArray(h))[g.epsilonId])
+                {
+                    other[g.epsilonId] = false;
+                    temp[] |= resultTable.getSlice(h)[];
+                    other[g.epsilonId] = true;
+                    h += 1;
+
+                    // Went off the array
+                    if (h == p.rhsIds.length)
+                    {
+                        setBit(temp, g.epsilonId);
+                        continue productionLoop;
+                    }
+                }
+            }
+
+            // The thing at h is not an epsilon.
+            setBit(temp, h);
+            temp[] |= resultTable.getSlice(h)[];
+        }
+        
+        // whichever things were new.
+        temp[] &= ~resultTable.getSlice(t)[];
+        
+        // Some new stuff was added.
+        if (!iterateSetBits(temp, numSymbols).empty)
+        {
+            queue ~= t;
+            resultTable.getSlice(t)[] |= temp[];
+        }
+    }
+
+    return resultTable;
+}
+
+// http://www.cs.ecu.edu/karl/5220/spr16/Notes/Top-down/follow.html
+OperationTable makeFollowTable(in Grammar g, in OperationTable firstTable, const(size_t)[] tokenMask)
+{
+    const eofId = g.symbols.length;
+    const numSymbols = g.symbols.length + 1;
     auto resultTable = OperationTable(numSymbols, numSymbols);
 
-    auto tempTable = OperationTable(numSymbols, 1);
-    auto tempArray1 = tempTable.getBitArray(0);
-    auto tempBuffer1 = tempTable.getSlice(0);
+    // 1. Add $ to FOLLOW(S), where S is the start nonterminal.
+    resultTable.getBitArray(g.initialSymbolId)[eofId] = true;
 
     import std.container : DList;
     auto queue = DList!size_t();
@@ -208,58 +277,69 @@ OperationTable makeEpsilonOperationTable(int direction)(in Grammar g, size_t eps
             queue ~= i;
     }
 
+    size_t[] temp = bitMemory(numSymbols);
+    size_t[] hasBeenQueued = bitMemory(numSymbols);
+
     while (!queue.empty)
     {
         size_t t = queue.front;
         queue.removeFront();
-        tempBuffer1[] = 0;
+        clearBit(hasBeenQueued, t);
 
         productionLoop: foreach (p; g.symbols[t].productions)
         {
-            if (p.rhsIds[] == [epsilonSymbolId])
+            auto rhsIds = p.rhsIds;
+
+            // 2. If there is a production A → αBβ,
+            // then add every token that is in FIRST(β) to FOLLOW(B).
+            // (Do not add ε to FOLLOW(B). 
+            if (rhsIds.length >= 2
+                && !g.symbols[rhsIds[$ - 2]].isTerminal)
             {
-                tempArray1[epsilonSymbolId] = true;
-                continue;
-            }
 
-            static if (direction == 1)
-                size_t h = p.rhsIds[0];
-            else
-                size_t h = p.rhsIds[$ - 1];
+                const bIndex = rhsIds[$ - 2];
+                auto B = resultTable.getSlice(bIndex);
+                auto beta = firstTable.getSlice(rhsIds[$ - 1]);
 
-            import std.bitmanip;
-            BitArray other;
-            while ((other = resultTable.getBitArray(h))[epsilonSymbolId])
-            {
-                other[epsilonSymbolId] = false;
-                tempBuffer1[] |= resultTable.getSlice(h)[];
-                other[epsilonSymbolId] = true;
-
-                // Went off the array
-                if (direction == 1
-                    ? (h >= g.symbols.length - direction)
-                    : (h < -direction))
+                bool shouldRemoveEpsilon = !getBit(B, g.epsilonId) && getBit(beta, g.epsilonId);
+                temp[0 .. beta.length] = beta[] & tokenMask[];
+                if (shouldRemoveEpsilon)
+                    setBit(temp, g.epsilonId);
+                
+                // 4. If there is a production A → αBβ where FIRST(β) contains ε,
+                // then add all members of FOLLOW(A) to FOLLOW(B).
+                // (Reasoning is like rule 3. Just erase β.)
+                if (getBit(beta, g.epsilonId))
                 {
-                    tempArray1[epsilonSymbolId] = true;
-                    continue productionLoop;
+                    auto A = resultTable.getSlice(t);
+                    temp[] |= A[];
                 }
 
-                h += direction;
+                temp[] &= ~B[];
+
+                if (temp.any!(s => s != 0) && !setBit(hasBeenQueued, bIndex))
+                {
+                    B[] = temp[];
+                    queue ~= bIndex;
+                }
             }
 
-            // The thing at h is not an epsilon.
-            tempArray1[h] = true;
-            tempBuffer1[] |= resultTable.getSlice(h)[];
-        }
-        
-        // whichever things were new.
-        tempBuffer1[] &= ~resultTable.getSlice(t)[];
-        
-        // Some new stuff was added.
-        if (!tempArray1.bitsSet.empty)
-        {
-            queue ~= t;
-            resultTable.getSlice(t)[] |= tempBuffer1[];
+            // 3. If there is a production A → αB, then add all members of FOLLOW(A) to FOLLOW(B).
+            // (If t can follow A, then there must be a sentential form β A t γ
+            // Using production A → αB gives sentential form β α B t γ, where B is followed by t.)
+            if (!g.symbols[rhsIds[$ - 1]].isTerminal)
+            {
+                const bIndex = rhsIds[$ - 1];
+                auto A = resultTable.getSlice(t);
+                auto B = resultTable.getSlice(bIndex);
+                temp[] = A[] & ~B[];
+
+                if (temp.any!(s => s != 0) && !setBit(hasBeenQueued, bIndex))
+                {
+                    B[] |= A[];
+                    queue ~= bIndex;
+                }
+            }
         }
     }
 

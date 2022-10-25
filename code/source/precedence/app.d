@@ -13,7 +13,7 @@ void main(string[] args)
     {
         writeln("Usage: ", args[0], " grammar");
         writeln("grammar can be a path to a grammar text file, or one of the following: ",
-            "lab3-example, wiki-example-1", "wiki-example-2");
+            "lab3-example, wiki-example-1, wiki-example-2");
         writeln("Example grammar file:");
         writeln("A --> a B c | D e F");
         writeln("B --> D | c");
@@ -21,53 +21,58 @@ void main(string[] args)
         return;
     }
 
-    Grammar g;
+    GrammarBuilder grammarBuilder;
     string grammarPath = args[1];
     switch (grammarPath)
     {
         case "lab3-example":
         {
             // 1. S→A  2. A→B  3. A→AcB  4. B→a  5. B →b 6. B→dD  7. D→Ae
-            g.addProduction("S", ["A"]);
-            g.addProduction("A", ["B"]);
-            g.addProduction("A", ["A", "c", "B"]);
-            g.addProduction("B", ["a"]);
-            g.addProduction("B", ["b"]);
-            g.addProduction("B", ["d", "D"]);
-            g.addProduction("D", ["A", "e"]);
+            grammarBuilder.addProduction("S", ["A"]);
+            grammarBuilder.addProduction("A", ["B"]);
+            grammarBuilder.addProduction("A", ["A", "c", "B"]);
+            grammarBuilder.addProduction("B", ["a"]);
+            grammarBuilder.addProduction("B", ["b"]);
+            grammarBuilder.addProduction("B", ["d", "D"]);
+            grammarBuilder.addProduction("D", ["A", "e"]);
             break;
         }
         case "wiki-example-1":
         {
             // Example from wiki
             // https://www.wikiwand.com/en/Wirth%E2%80%93Weber_precedence_relationship#/Examples
-            g.addProduction("S", ["a", "S", "S", "b"]);
-            g.addProduction("S", ["c"]);
+            grammarBuilder.addProduction("S", ["a", "S", "S", "b"]);
+            grammarBuilder.addProduction("S", ["c"]);
             break;
         }
         case "wiki-example-2":
         {
             // Example from wiki
             // https://www.wikiwand.com/en/Simple_precedence_parser#/Example
-            g.addProduction("E", ["E", "+", "T'"]);
-            g.addProduction("E", ["T'"]);
-            g.addProduction("T'", ["T"]);
-            g.addProduction("T", ["T", "*", "F"]);
-            g.addProduction("T", ["F"]);
-            g.addProduction("F", ["(", "E'", ")"]);
-            g.addProduction("F", ["num"]);
-            g.addProduction("E'", ["E"]);
+            grammarBuilder.addProduction("E", ["E", "+", "T'"]);
+            grammarBuilder.addProduction("E", ["T'"]);
+            grammarBuilder.addProduction("T'", ["T"]);
+            grammarBuilder.addProduction("T", ["T", "*", "F"]);
+            grammarBuilder.addProduction("T", ["F"]);
+            grammarBuilder.addProduction("F", ["(", "E'", ")"]);
+            grammarBuilder.addProduction("F", ["num"]);
+            grammarBuilder.addProduction("E'", ["E"]);
             break;
         }
         default:
         {
-            auto maybeGrammar = parseGrammarFile(grammarPath);
-            if (maybeGrammar.isNull)
+            auto maybeGrammarBuilder = parseGrammarFile(grammarPath);
+            if (maybeGrammarBuilder.isNull)
                 return;
-            g = maybeGrammar.get();
+            grammarBuilder = maybeGrammarBuilder.get();
             break;
         }
     }
+    
+    auto maybeGrammar = grammarBuilder.build();
+    if (maybeGrammar.isNull)
+        return;
+    const(Grammar) g = maybeGrammar.get();
     
     bool hasEpsilonProductions = g.checkForEpsilonProductions();
     bool hasUnreachableSymbols = g.checkForUnreachableSymbols();

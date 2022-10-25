@@ -1,5 +1,7 @@
 module sharedd.grammar;
 
+alias ssize_t = ptrdiff_t;
+
 struct Production
 {
     size_t[] rhsIds;
@@ -13,65 +15,84 @@ struct Symbol
     bool isTerminal() const { return productions.length == 0; }
 }
 
+struct GrammarBuilder
+{
+    Symbol[] _symbols;
+    size_t[string] _symbolIndexMap;
+}
+
 struct Grammar
 {
     Symbol[] symbols;
+    size_t[string] indexMap;
+    size_t numNonTerminals;
+    ssize_t epsilonId;
+    enum size_t initialSymbolId = 0;
 
-    auto productions(this This)()
+    bool hasEpsilon() const
     {
-        static struct ProductionInfo
-        {
-            size_t lhsId;
-            typeof(This.symbols[0].productions[0].rhsIds) rhsIds;
-        }
+        return epsilonId >= 0;
+    }
+
+    auto productions() const
+    {
         import std.algorithm;
         import std.range;
+        import std.typecons;
         return symbols[]
             .enumerate
             .map!(t => t.value.productions
-                .map!(p => ProductionInfo(t.index, p.rhsIds)))
+                .map!(p => tuple!("lhsId", "rhsIds")(t.index, p.rhsIds)))
             .joiner;
     }
 
-    auto terminals(this This)()
+    const(Symbol)[] terminals() const
+    {
+        return symbols[numNonTerminals .. $];
+    }
+
+    size_t numTerminals() const
+    {
+        return symbols.length - numNonTerminals;
+    }
+
+    size_t getTerminalIndex(size_t id) const
+    {
+        assert(id >= numNonTerminals);
+        return id - numNonTerminals;
+    }
+
+    auto iterateTerminals() const
     {
         import std.range;
         import std.algorithm;
         import std.typecons;
         return symbols[]
             .enumerate
-            .filter!(t => t.value.isTerminal)
-            .map!(t => tuple!("index", "name")(t.index, t.value.name));
+            .drop(numNonTerminals)
+            .map!(t => tuple!("id", "name")(t.index + numNonTerminals, t.value.name));
     }
 
-    auto nonTerminals(this This)()
+    const(Symbol)[] nonTerminals() const
     {
-        import std.range;
-        import std.algorithm;
-        import std.typecons;
-        return symbols[]
-            .enumerate
-            .filter!(t => !t.value.isTerminal)
-            .map!(t => tuple!("index", "productions")(t.index, t.value.productions));
+        return symbols[0 .. numNonTerminals];
     }
-
-    enum size_t initialSymbolId = 0;
 }
 
-
-size_t addOrGetSymbolId(ref Grammar g, string name)
+size_t addOrGetSymbolId(ref GrammarBuilder g, string name)
 {
     import std.algorithm;
-    auto id = g.symbols.countUntil!(t => t.name == name);
-    if (id == -1)
-    {
-        id = g.symbols.length;
-        g.symbols ~= Symbol(name);
-    }
-    return cast(size_t) id;
+
+    if (const idp = name in g._symbolIndexMap)
+        return *idp;
+    
+    const id = g._symbols.length;
+    g._symbols ~= Symbol(name);
+    g._symbolIndexMap[name] = id;
+    return id;
 }
 
-void addProduction(ref Grammar g, size_t lhsId, scope const(string)[] rhs)
+void addProduction(ref GrammarBuilder g, size_t lhsId, scope const(string)[] rhs)
 {
     size_t[] rhsIds;
     foreach (symbolName; rhs)
@@ -79,7 +100,82 @@ void addProduction(ref Grammar g, size_t lhsId, scope const(string)[] rhs)
         size_t id = g.addOrGetSymbolId(symbolName);
         rhsIds ~= id;
     }
-    g.symbols[lhsId].productions ~= Production(rhsIds);
+    g._symbols[lhsId].productions ~= Production(rhsIds);
+}
+
+Nullable!(const(Grammar)) build(alias errorHandler = writeln)(ref GrammarBuilder g, bool addEpsilon = false)
+{
+    import std.algorithm;
+    import std.range;
+    import std.array;
+
+    // Maybe add another function for this?
+    ssize_t epsilonId = g._symbols[].countUntil!(s => s.name == "eps");
+    if (epsilonId == -1 && addEpsilon)
+    {
+        epsilonId = g._symbols.length;
+        g._symbols ~= Symbol("eps", null);
+    }
+    if (epsilonId != -1)
+    {
+        if (g._symbols[epsilonId].productions.length != 0)
+        {
+            errorHandler("The epsilon symbol must not contain any productions.");
+            return typeof(return).init;
+        }
+
+        if (g._symbols
+            .map!(s => s.productions)
+            .joiner
+            .map!(p => p.rhsIds)
+            .any!((rhsIds) => rhsIds.length > 1
+                && rhsIds[].count(epsilonId) != 0))
+        {
+            writeln("If a production contains an epsilon, it must be the only symbol.");
+            return typeof(return).init;
+        }
+    }
+
+    size_t[] idMap;
+    idMap.length = g._symbols.length;
+
+    size_t indexCounter = 0;
+    foreach (sid, s; g._symbols)
+    {
+        if (!s.isTerminal)
+            idMap[sid] = indexCounter++;
+    }
+    size_t numNonTerminals = indexCounter;
+    foreach (sid, s; g._symbols)
+    {
+        if (s.isTerminal && s.name != "eps")
+            idMap[sid] = indexCounter++;
+    }
+    if (epsilonId != -1)
+        idMap[epsilonId] = indexCounter++;
+
+    auto newSymbols = new Symbol[](g._symbols.length);
+    foreach (sid, s; g._symbols)
+    {
+        const newId = idMap[sid];
+        Production[] newProductions = s.productions
+            .map!(p => 
+                Production(p.rhsIds
+                    .map!(rhsId => idMap[rhsId])
+                    .array))
+            .array;
+        newSymbols[newId] = Symbol(s.name, newProductions);
+    }
+
+    size_t[string] indexMap;
+    foreach (name, id; g._symbolIndexMap)
+        indexMap[name] = idMap[id];
+
+    size_t mappedEpsId = epsilonId;
+    if (mappedEpsId != -1)
+        mappedEpsId = newSymbols.length - 1;
+
+    return nullable(const Grammar(newSymbols, indexMap, numNonTerminals, mappedEpsId));
 }
 
 void writeProduction(TWriter)(auto ref TWriter w, in Grammar g, size_t lhs, scope const(size_t)[] rhs)
@@ -113,7 +209,7 @@ void writeProductions(TWriter)(auto ref TWriter w, in Grammar g)
     }
 }
 
-void addProduction(ref Grammar g, string lhs, scope const(string)[] rhs)
+void addProduction(ref GrammarBuilder g, string lhs, scope const(string)[] rhs)
 {
     addProduction(g, g.addOrGetSymbolId(lhs), rhs);
 }
@@ -240,12 +336,13 @@ Nullable!(size_t[]) tokenize(const Grammar g, string input)
     while (index != input.length)
     {
         bool matched = false;
-        foreach (tid, terminal; g.terminals)
+        foreach (length; 1 .. input.length - index + 1)
         {
-            if (input[index .. $].startsWith(terminal))
+            auto slice = input[index .. index + length];
+            if (auto tid = slice in g.indexMap)
             {
-                tokens ~= tid;
-                index += terminal.length;
+                tokens ~= *tid;
+                index += length;
                 matched = true;
                 break;
             }
@@ -253,7 +350,7 @@ Nullable!(size_t[]) tokenize(const Grammar g, string input)
 
         if (!matched)
         {
-            writeln("Bad input around ", input[0 .. index],
+            writeln("Bad input around '", input[0 .. index], "'",
                 ". Expected one of ", g.terminals.map!(t => t.name).join(','), " got ", input[index .. $]);
             return typeof(return).init;
         }
@@ -261,15 +358,21 @@ Nullable!(size_t[]) tokenize(const Grammar g, string input)
     return nullable(tokens[]);
 }
 
-Nullable!Grammar parseGrammarFile(string fileName)
+Nullable!GrammarBuilder parseGrammarFile(string fileName)
 {
     import std.stdio;
+    import std.file;
+    if (!exists(fileName))
+    {
+        writeln("The file ", fileName, " does not exist.");
+        return typeof(return).init;
+    }
     return File(fileName).byLineCopy.parseGrammar;
 }
 
 import std.range;
 
-Nullable!Grammar parseGrammar(TLineRange)(TLineRange lines)
+Nullable!GrammarBuilder parseGrammar(TLineRange)(TLineRange lines)
     if (isInputRange!TLineRange && is(ElementType!TLineRange : string))
 {
     import std.range;
@@ -278,7 +381,7 @@ Nullable!Grammar parseGrammar(TLineRange)(TLineRange lines)
     import std.algorithm;
     import std.uni;
     
-    Grammar g;
+    GrammarBuilder g;
     bool isGood = true;
     foreach (lineIndex, line; lines.map!(l => l.strip).enumerate)
     {
@@ -335,7 +438,7 @@ Nullable!Grammar parseGrammar(TLineRange)(TLineRange lines)
                 .map!(s => g.addOrGetSymbolId(s))
                 .array))
         {
-            g.symbols[lhsId].productions ~= Production(production);
+            g._symbols[lhsId].productions ~= Production(production);
         }
     }
 

@@ -43,16 +43,21 @@ struct OperationTable
 
     void writeTo(TWriter)(auto ref TWriter w, in Grammar g, string funcName)
     {
+        return writeTo(w, i => g.symbols[i].name, funcName);
+    }
+
+    void writeTo(TWriter)(auto ref TWriter w, scope string delegate(size_t) getName, string funcName)
+    {
         import std.format.write;
         import std.range;
-        foreach (i, s; g.symbols)
+        foreach (i; 0 .. _dimensionBits)
         {
-            w.formattedWrite!"%s(%s) = {"(funcName, s.name);
+            w.formattedWrite!"%s(%s) = {"(funcName, getName(i));
             foreach (index, j; getBitArray(i).bitsSet.enumerate)
             {
                 if (index != 0)
                     w.put(", ");
-                w.put(g.symbols[j].name);
+                w.put(getName(j));
             }
             w.put("}\n");
         }
