@@ -23,9 +23,9 @@ Să se construiască tabelul de analiză LL(1) şi să se analizeze şirul **dac
 
 ## Realizarea
 
-Rulez [programul meu](https://github.com/AntonC9018/uni_compilers/blob/5566defe6a0f04e0e39c6494df36b4de62af33d0/code/source/precedence/app.d) la această gramatică:
+Rulez [programul meu](https://github.com/AntonC9018/uni_compilers/blob/3cf8f73df367aa337bed9513e3011a0b2da9dff2/code/source/ll1/app.d) la această gramatică:
 
-Am trebuit să schimb regula $ {A} \rightarrow {A c B} $ la $ {A} \rightarrow {c B B} $, deoarece fără cu această regulă gramatica nu este LL(1) - parsabilă.
+Am trebuit să schimb regula $ {A} \rightarrow {A c B} $ la $ {A} \rightarrow {c B B} $, deoarece fără această regulă gramatica nu este LL(1) - parsabilă.
 Dar atunci și cuvântul **dacbcbeca** nu s-ar potrivi. De aceea voi selecta cuvântul **cdcabedae**.
 
 ```
