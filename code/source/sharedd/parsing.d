@@ -50,7 +50,7 @@ struct OperationTable
     {
         import std.format.write;
         import std.range;
-        foreach (i; 0 .. _dimensionBits)
+        foreach (i; 0 .. _memory.length / _dimensionSizeTs)
         {
             w.formattedWrite!"%s(%s) = {"(funcName, getName(i));
             foreach (index, j; getBitArray(i).bitsSet.enumerate)
@@ -64,4 +64,60 @@ struct OperationTable
     }
 }
 
+
+static struct Stack(T)
+{
+    T[] _underlyingArray = null;
+    size_t _currentLength = 0;
+
+    auto opSlice(this This)()
+    {
+        return _underlyingArray[0 .. _currentLength];
+    }
+    void push(V : T)(auto ref V el)
+    {
+        import std.algorithm;
+        if (_underlyingArray.length <= _currentLength)
+            _underlyingArray.length = max(_underlyingArray.length * 2, 1);
+        _underlyingArray[_currentLength++] = el;
+    }
+    void pushN(V)(auto ref V elements)
+        if (is(ElementType!V : T))
+    {
+        import std.algorithm;
+        if (_underlyingArray.length <= _currentLength + elements.length)
+            _underlyingArray.length = max(_underlyingArray.length * 2, _currentLength + elements.length);
+        foreach (i; _currentLength .. _currentLength + elements.length)
+        {
+            _underlyingArray[i] = elements.front;
+            elements.popFront();
+        }
+        _currentLength += elements.length;
+    }
+    T pop()
+    {
+        assert(_currentLength >= 1);
+        return _underlyingArray[--_currentLength];
+    }
+    T[] popN(size_t i)
+    {
+        size_t prev = _currentLength;
+        assert(_currentLength >= i);
+        _currentLength -= i;
+        return _underlyingArray[_currentLength .. prev];
+    }
+    bool empty() const
+    {
+        return _currentLength == 0;
+    }
+    ref inout(T) top() inout
+    {
+        assert(_currentLength > 0);
+        return _underlyingArray[_currentLength - 1];
+    }
+    size_t length() const
+    {
+        return _currentLength;
+    }
+}
 

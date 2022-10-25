@@ -28,6 +28,7 @@ struct Grammar
     size_t numNonTerminals;
     ssize_t epsilonId;
     enum size_t initialSymbolId = 0;
+    enum size_t initialNonTerminalIndex = 0;
 
     bool hasEpsilon() const
     {
@@ -62,6 +63,11 @@ struct Grammar
         return id - numNonTerminals;
     }
 
+    size_t getNonTerminalIndex(size_t id) const
+    {
+        return id;
+    }
+
     auto iterateTerminals() const
     {
         import std.range;
@@ -70,7 +76,7 @@ struct Grammar
         return symbols[]
             .enumerate
             .drop(numNonTerminals)
-            .map!(t => tuple!("id", "name")(t.index + numNonTerminals, t.value.name));
+            .map!(t => tuple!("id", "name")(t.index, t.value.name));
     }
 
     const(Symbol)[] nonTerminals() const

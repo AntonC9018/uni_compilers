@@ -6,6 +6,7 @@ import sharedd.helper;
 import std.stdio;
 import std.algorithm;
 import std.range;
+import std.typecons : Nullable, nullable;
 
 void main(string[] args)
 {
@@ -35,6 +36,7 @@ void main(string[] args)
     // This is not ideal, might alocate a few more size_t's than necessary.
     size_t[] tokenMask = bitMemory(g.symbols.length);
     setBitRange(tokenMask, g.numNonTerminals, g.symbols.length, true);
+    clearBit(tokenMask, g.epsilonId);
     auto followTable = makeFollowTable(g, firstTable, tokenMask);
     
     writeProductions(stdout.lockingTextWriter, g);
@@ -42,150 +44,163 @@ void main(string[] args)
     followTable.writeTo(stdout.lockingTextWriter, i => getPrecedenceSymbolName(g, i), "Follow");
 
     {
-        import mir.ndslice : slice;
-        const eofIdInFollowTable = g.symbols.length;
-        const size_t tableEofIndex = g.epsilonId;
-        const ssize_t none = -1;
-        const ssize_t epsilon = -2;
-        auto table = slice!ssize_t(g.numNonTerminals, g.numTerminals);
-        table[] = none;
+        auto ll1Result = buildLL1Table(g, tokenMask, firstTable, followTable);
+        auto ll1 = &ll1Result.ll1;
+        writeLL1Table(g, *ll1);
 
-        bool isError = false;
-        void assignMaybeError(size_t lhsId, size_t rhsId, size_t productionIndex)
+        if (!ll1Result.isValid)
+            return;
+
+        while (true)
         {
-            size_t rhsIndex;
-            // $ = epsilon? still not sure.
-            // if (rhsId == eofIdInFollowTable)
-            //     rhsId = g.epsilonId;
-            // else
-                rhsIndex = g.getTerminalIndex(rhsId);
+            import std.string;
             
-            ssize_t* indexInTable = &table[lhsId, rhsIndex];
-            if (*indexInTable == none)
-            {
-                *indexInTable = productionIndex;
-                return;
-            }
-            if (*indexInTable == productionIndex)
-                return;
+            write("Enter input: ");
+            string inputLine = readln().strip;
 
-            auto productions = g.symbols[lhsId].productions;
-            if (productionIndex == epsilon
-                && productions[*indexInTable].rhsIds == [g.epsilonId])
+            auto maybeInput = tokenize(g, inputLine);
+            if (maybeInput.isNull)
+                continue;
+            size_t[] input = maybeInput.get();
+            
+            SyntaxTree syntaxTree = matchInput(g, *ll1, input);
+            foreach (index, node; syntaxTree.nodes)
             {
-                return;
-            }
-            if (*indexInTable == epsilon
-                && productions[productionIndex].rhsIds == [g.epsilonId])
-            {
-                *indexInTable = productionIndex;
-                return;
-            }
-
-            {
-                writeln("This grammar is not an LL(1) grammar: Rule collision:");
-
-                void writeProdEpsilon(ssize_t productionIndex)
+                if (node.children.length == 0)
+                    continue;
+                write("A", index, " --> ");
+                foreach (childIndex, childId; node.children)
                 {
-                    if (productionIndex == epsilon)
-                    {
-                        writeln(g.symbols[lhsId].name, " --> eps");
-                    }
-                    else
-                    {
-                        const(size_t)[] rhsIds = productions[productionIndex].rhsIds;
-                        writeProduction(stdout.lockingTextWriter, g, lhsId, rhsIds);
-                        writeln();
-                    }
+                    write("A", childId);
+                    if (childIndex != node.children.length)
+                        write(", ");
                 }
-                writeProdEpsilon(productionIndex);
-                writeProdEpsilon(*indexInTable);
-                isError = true;
+                writeln();
             }
-        }
-
-        size_t[] temp = bitMemory(g.symbols.length + 1);
-
-        foreach (lhsId, lhsSymbol; g.symbols)
-        {
-            foreach (productionIndex, production; lhsSymbol.productions)
-            {
-                auto rhsIds = production.rhsIds;
-                auto rhsFirst = firstTable.getSlice(rhsIds[0]);
-                auto followA = followTable.getSlice(lhsId);
-
-                temp[] = rhsFirst[] & tokenMask[];
-                foreach (terminalId; iterateSetBits(temp, g.symbols.length))
-                    assignMaybeError(lhsId, terminalId, productionIndex);
-
-                if (getBit(rhsFirst, g.epsilonId))
-                {
-                    temp[] = followA[] & tokenMask[];
-                    foreach (terminalId; iterateSetBits(temp, g.symbols.length))
-                        assignMaybeError(lhsId, terminalId, epsilon);
-
-                    if (getBit(followA, eofIdInFollowTable))
-                        assignMaybeError(lhsId, tableEofIndex, epsilon);
-                }
-            }
-        }
-
-        import std.algorithm;
-        auto terminalColumns = g.iterateTerminals;
-        auto nonTerminalRows = g.nonTerminals;
-
-        import std.range;
-        auto strings = g.symbols[].enumerate.map!((s)
-        {
-            return s.value.productions.map!((p)
-            {
-                auto app = appender!string;
-                writeProduction(app, g, s.index, p.rhsIds);
-                return app[];
-            }).array;
-        }).array;
-
-        size_t cellWidth = strings.joiner.map!(s => s.length).maxElement;
-        size_t leftWidth = nonTerminalRows.map!(s => s.name.length).maxElement;
-
-        write(' '.repeat(leftWidth));
-        foreach (s; terminalColumns.map!(t => t.id == tableEofIndex ? "$" : t.name))
-            writef!"|%*s"(cellWidth, s);
-        writeln();
-        foreach (irow, s; nonTerminalRows.enumerate)
-        {
-            writef!"%*s"(leftWidth, s.name);
-            foreach (icol, t; terminalColumns.enumerate)
-            {
-                const v = table[irow, icol];
-                switch (v)
-                {
-                    case none:
-                    {
-                        write("|", ' '.repeat(cellWidth));
-                        break;
-                    }
-                    case epsilon:
-                    {
-                        writef!"|%*s"(cellWidth, g.symbols[irow].name ~ " --> eps");
-                        break;
-                    }
-                    default:
-                    {
-                        writef!"|%*s"(cellWidth, strings[irow][v]);
-                        break;
-                    }
-                }
-            }
-            writeln();
         }
     }
 }
 
-enum int HeadDirection = 1;
-enum int TailDirection = -1;
-
 import sharedd.parsing;
+
+
+static struct SyntaxNode
+{
+    ssize_t productionIndex;
+    size_t[] children;
+    ssize_t parent;
+    size_t symbolId;
+}
+
+static struct SyntaxTree
+{
+    SyntaxNode[] nodes;
+    enum size_t rootIndex = 0;
+
+    const(SyntaxNode)* root() const
+    {
+        return &nodes[rootIndex];
+    }
+
+    this(size_t initialCapacity, size_t initialSymbolId)
+    {
+        nodes ~= SyntaxNode(SpecialProduction.none, null, -1, initialSymbolId); 
+    }
+
+    const(size_t)[] addNodes(T)(size_t parent, size_t productionIndex, auto ref T range)
+    {
+        nodes[parent].productionIndex = productionIndex;
+        
+        foreach (size_t childSymbolId; range)
+        {
+            nodes[parent].children ~= nodes.length;
+            nodes ~= SyntaxNode(SpecialProduction.none, null, parent, childSymbolId);
+        }
+
+        return nodes[parent].children;
+    }
+}
+
+SyntaxTree matchInput(in Grammar g, in LL1Table ll1, const(size_t)[] input)
+{
+    import std.algorithm;
+    import std.range;
+    import std.array;
+    import std.stdio;
+
+    static struct StackItem
+    {
+        size_t symbolId;
+        size_t nodeIndex;
+    }
+
+    Stack!StackItem stack;
+    auto syntaxTree = SyntaxTree(input.length * 2, g.initialSymbolId);
+    stack.push(StackItem(g.initialSymbolId, size_t(0)));
+
+    static struct RuleApplication
+    {
+        size_t lhsId;
+        ssize_t productionIndex;
+    }
+    // auto appliedRules = appender!(RuleApplication[]);
+
+    while (!input.empty)
+    {
+        size_t token = input.front;
+        auto top = stack.top;
+        if (top.symbolId == token)
+        {
+            input.popFront();
+            continue;
+        }
+
+        auto symbol = g.symbols[top.symbolId];
+        if (symbol.isTerminal)
+        {
+            writeln("Unexpected symbol ", symbol.name);
+            return syntaxTree;
+        }
+        
+        stack.pop();
+        input.popFront();
+
+        ssize_t productionIndex = ll1.table[g.getNonTerminalIndex(top.symbolId), g.getTerminalIndex(token)];
+        switch (productionIndex)
+        {
+            case SpecialProduction.none:
+            {
+                writeln("Not matched");
+                return syntaxTree;
+            }
+            case SpecialProduction.epsilon:
+            {
+                break;
+            }
+            default:
+            {
+                auto production = symbol.productions[productionIndex];
+                auto childNodeIds = syntaxTree.addNodes(top.symbolId, productionIndex, production.rhsIds);
+
+                foreach (rhsId, childNodeId; production.rhsIds[].zip(childNodeIds[]).retro)
+                    stack.push(StackItem(rhsId, childNodeId));
+
+                break;
+            }
+        }
+
+        // appliedRules ~= RuleApplication(top.symbolId, productionIndex);
+    }
+
+    if (!stack.empty)
+    {
+        writeln("Stack not empty, unmatched.");
+        return syntaxTree;
+    }
+
+    return syntaxTree;
+}
+
 
 OperationTable makeFirstTable(in Grammar g)
 {
@@ -264,10 +279,10 @@ OperationTable makeFollowTable(in Grammar g, in OperationTable firstTable, const
 {
     const eofId = g.symbols.length;
     const numSymbols = g.symbols.length + 1;
-    auto resultTable = OperationTable(numSymbols, numSymbols);
+    auto resultTable = OperationTable(numSymbols, g.numNonTerminals);
 
     // 1. Add $ to FOLLOW(S), where S is the start nonterminal.
-    resultTable.getBitArray(g.initialSymbolId)[eofId] = true;
+    resultTable.getBitArray(g.initialNonTerminalIndex)[eofId] = true;
 
     import std.container : DList;
     auto queue = DList!size_t();
@@ -279,48 +294,52 @@ OperationTable makeFollowTable(in Grammar g, in OperationTable firstTable, const
 
     size_t[] temp = bitMemory(numSymbols);
     size_t[] hasBeenQueued = bitMemory(numSymbols);
+    assert(!getBit(tokenMask, g.epsilonId));
 
     while (!queue.empty)
     {
-        size_t t = queue.front;
+        size_t aid = queue.front;
+        size_t aIndex = g.getNonTerminalIndex(aid);
         queue.removeFront();
-        clearBit(hasBeenQueued, t);
+        clearBit(hasBeenQueued, aid);
 
-        productionLoop: foreach (p; g.symbols[t].productions)
+        productionLoop: foreach (p; g.symbols[aid].productions)
         {
             auto rhsIds = p.rhsIds;
 
-            // 2. If there is a production A → αBβ,
-            // then add every token that is in FIRST(β) to FOLLOW(B).
-            // (Do not add ε to FOLLOW(B). 
-            if (rhsIds.length >= 2
-                && !g.symbols[rhsIds[$ - 2]].isTerminal)
+            import std.typecons : No;
+            foreach (chunk; rhsIds.slide!(No.withPartial)(2))
             {
+                size_t bIndex = g.getNonTerminalIndex(chunk[0]);
 
-                const bIndex = rhsIds[$ - 2];
-                auto B = resultTable.getSlice(bIndex);
-                auto beta = firstTable.getSlice(rhsIds[$ - 1]);
+                if (g.symbols[chunk[0]].isTerminal)
+                    continue;
 
-                bool shouldRemoveEpsilon = !getBit(B, g.epsilonId) && getBit(beta, g.epsilonId);
-                temp[0 .. beta.length] = beta[] & tokenMask[];
-                if (shouldRemoveEpsilon)
-                    setBit(temp, g.epsilonId);
-                
-                // 4. If there is a production A → αBβ where FIRST(β) contains ε,
-                // then add all members of FOLLOW(A) to FOLLOW(B).
-                // (Reasoning is like rule 3. Just erase β.)
-                if (getBit(beta, g.epsilonId))
+                // 2. If there is a production A → αBβ,
+                // then add every token that is in FIRST(β) to FOLLOW(B).
+                // Do not add ε to FOLLOW(B). 
                 {
-                    auto A = resultTable.getSlice(t);
-                    temp[] |= A[];
-                }
+                    auto B = resultTable.getSlice(bIndex);
+                    auto beta = firstTable.getSlice(chunk[1]);
 
-                temp[] &= ~B[];
+                    temp[0 .. beta.length] = beta[] & tokenMask[];
+                    
+                    // 4. If there is a production A → αBβ where FIRST(β) contains ε,
+                    // then add all members of FOLLOW(A) to FOLLOW(B).
+                    // (Reasoning is like rule 3. Just erase β.)
+                    if (getBit(beta, g.epsilonId))
+                    {
+                        auto A = resultTable.getSlice(aIndex);
+                        temp[] |= A[];
+                    }
 
-                if (temp.any!(s => s != 0) && !setBit(hasBeenQueued, bIndex))
-                {
-                    B[] = temp[];
-                    queue ~= bIndex;
+                    temp[] &= ~B[];
+
+                    if (temp.any!(s => s != 0) && !setBit(hasBeenQueued, bIndex))
+                    {
+                        B[] |= temp[];
+                        queue ~= bIndex;
+                    }
                 }
             }
 
@@ -329,15 +348,15 @@ OperationTable makeFollowTable(in Grammar g, in OperationTable firstTable, const
             // Using production A → αB gives sentential form β α B t γ, where B is followed by t.)
             if (!g.symbols[rhsIds[$ - 1]].isTerminal)
             {
-                const bIndex = rhsIds[$ - 1];
-                auto A = resultTable.getSlice(t);
-                auto B = resultTable.getSlice(bIndex);
+                const bIdex = g.getNonTerminalIndex(rhsIds[$ - 1]);
+                auto A = resultTable.getSlice(aIndex);
+                auto B = resultTable.getSlice(bIdex);
                 temp[] = A[] & ~B[];
 
-                if (temp.any!(s => s != 0) && !setBit(hasBeenQueued, bIndex))
+                if (temp.any!(s => s != 0) && !setBit(hasBeenQueued, bIdex))
                 {
                     B[] |= A[];
-                    queue ~= bIndex;
+                    queue ~= bIdex;
                 }
             }
         }
@@ -352,4 +371,180 @@ string getPrecedenceSymbolName(in Grammar g, size_t i)
         return "$";
     else
         return g.symbols[i].name;
+}
+
+import mir.ndslice : Slice, slice;
+
+struct LL1Table
+{
+    size_t eofTableIndex;
+    Slice!(ssize_t*, 2) table;
+}
+
+enum SpecialProduction : ssize_t
+{
+    none = -1,
+    epsilon = -2,
+}
+
+
+auto buildLL1Table(TWriter)( 
+    in Grammar g,
+    const(size_t)[] tokenMask,
+    in OperationTable firstTable,
+    in OperationTable followTable,
+    auto ref TWriter errorHandler = stdout.lockingTextWriter)
+{
+    struct Result
+    {
+        LL1Table ll1;
+        bool isValid;
+    }
+    auto table = slice!ssize_t(g.numNonTerminals, g.numTerminals);
+    size_t eofTableIndex = g.epsilonId;
+
+    table[] = SpecialProduction.none;
+
+    bool isError = false;
+    void assignMaybeError(size_t lhsId, size_t rhsId, size_t productionIndex)
+    {
+        size_t rhsIndex;
+        // $ = epsilon? still not sure.
+        // if (rhsId == eofId)
+        //     rhsId = g.epsilonId;
+        // else
+            rhsIndex = g.getTerminalIndex(rhsId);
+        
+        ssize_t* indexInTable = &table[lhsId, rhsIndex];
+        if (*indexInTable == SpecialProduction.none)
+        {
+            *indexInTable = productionIndex;
+            return;
+        }
+        if (*indexInTable == productionIndex)
+            return;
+
+        auto productions = g.symbols[lhsId].productions;
+        if (productionIndex == SpecialProduction.epsilon
+            && productions[*indexInTable].rhsIds == [g.epsilonId])
+        {
+            return;
+        }
+        if (*indexInTable == SpecialProduction.epsilon
+            && productions[productionIndex].rhsIds == [g.epsilonId])
+        {
+            *indexInTable = productionIndex;
+            return;
+        }
+
+        {
+            errorHandler.put("This grammar is not an LL(1) grammar: Rule collision:\n");
+
+            import std.format;
+            void writeProdEpsilon(ssize_t productionIndex)
+            {
+                if (productionIndex == SpecialProduction.epsilon)
+                {
+                    errorHandler.formattedWrite!"%s --> eps"(g.symbols[lhsId].name);
+                }
+                else
+                {
+                    const(size_t)[] rhsIds = productions[productionIndex].rhsIds;
+                    writeProduction(errorHandler, g, lhsId, rhsIds);
+                    errorHandler.put("\n");
+                }
+            }
+            writeProdEpsilon(productionIndex);
+            writeProdEpsilon(*indexInTable);
+            isError = true;
+        }
+    }
+
+    size_t[] temp = bitMemory(g.symbols.length + 1);
+
+    foreach (lhsId, lhsSymbol; g.symbols)
+    {
+        foreach (productionIndex, production; lhsSymbol.productions)
+        {
+            auto rhsIds = production.rhsIds;
+            auto rhsFirst = firstTable.getSlice(rhsIds[0]);
+            auto followA = followTable.getSlice(lhsId);
+
+            temp[] = rhsFirst[] & tokenMask[];
+            foreach (terminalId; iterateSetBits(temp, g.symbols.length))
+                assignMaybeError(lhsId, terminalId, productionIndex);
+
+            if (getBit(rhsFirst, g.epsilonId))
+            {
+                temp[] = followA[] & tokenMask[];
+                foreach (terminalId; iterateSetBits(temp, g.symbols.length))
+                    assignMaybeError(lhsId, terminalId, SpecialProduction.epsilon);
+
+                if (getBit(followA, g.eofId))
+                    assignMaybeError(lhsId, eofTableIndex, SpecialProduction.epsilon);
+            }
+        }
+    }
+
+    Result result;
+    result.ll1 = LL1Table(eofTableIndex, table);
+    result.isValid = !isError;
+
+    return result;
+}
+
+size_t eofId(in Grammar g) { return g.symbols.length; }
+
+
+void writeLL1Table(in Grammar g, in LL1Table ll1)
+{
+    import std.range;
+    import std.algorithm;
+    auto terminalColumns = g.iterateTerminals;
+    auto nonTerminalRows = g.nonTerminals;
+    
+    auto strings = g.symbols[].enumerate.map!((s)
+    {
+        return s.value.productions.map!((p)
+        {
+            auto app = appender!string;
+            writeProduction(app, g, s.index, p.rhsIds);
+            return app[];
+        }).array;
+    }).array;
+
+    size_t cellWidth = strings.joiner.map!(s => s.length).maxElement;
+    size_t leftWidth = nonTerminalRows.map!(s => s.name.length).maxElement;
+
+    write(' '.repeat(leftWidth));
+    foreach (s; terminalColumns)
+        writef!"|%*s"(cellWidth, s.id == g.epsilonId ? "$" : s.name);
+    writeln();
+    foreach (irow, s; nonTerminalRows.enumerate)
+    {
+        writef!"%*s"(leftWidth, s.name);
+        foreach (icol, t; terminalColumns.enumerate)
+        {
+            const v = ll1.table[irow, icol];
+            switch (v)
+            {
+                case SpecialProduction.none:
+                {
+                    write("|", ' '.repeat(cellWidth));
+                    break;
+                }
+                case SpecialProduction.epsilon:
+                {
+                    writef!"|%*s"(cellWidth, g.symbols[irow].name ~ " --> eps");
+                    break;
+                }
+                default:
+                {
+                    writef!"|%*s"(cellWidth, strings[irow][v]);
+                    break;
+                }
+            }
+        }
+        writeln();
+    }
 }

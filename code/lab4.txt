@@ -1,3 +1,9 @@
-S --> F
-S --> ( S + F )
-F --> a
+S --> A
+A --> B | A c B
+B --> a | b | d D
+D --> A e
+// S --> A
+// A --> c B
+// B --> C d
+// C --> D | C b D
+// D --> a | a c C d 
