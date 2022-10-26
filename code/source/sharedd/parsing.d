@@ -77,22 +77,26 @@ static struct Stack(T)
     void push(V : T)(auto ref V el)
     {
         import std.algorithm;
-        if (_underlyingArray.length <= _currentLength)
-            _underlyingArray.length = max(_underlyingArray.length * 2, 1);
+        maybeGrow(_currentLength + 1);
         _underlyingArray[_currentLength++] = el;
     }
     void pushN(V)(auto ref V elements)
         if (is(ElementType!V : T))
     {
         import std.algorithm;
-        if (_underlyingArray.length <= _currentLength + elements.length)
-            _underlyingArray.length = max(_underlyingArray.length * 2, _currentLength + elements.length);
+        maybeGrow(_currentLength + elements.length);
         foreach (i; _currentLength .. _currentLength + elements.length)
         {
             _underlyingArray[i] = elements.front;
             elements.popFront();
         }
         _currentLength += elements.length;
+    }
+    private void maybeGrow(size_t desiredMinimumSize)
+    {
+        import std.algorithm;
+        if (_underlyingArray.length < desiredMinimumSize)
+            _underlyingArray.length = max(_underlyingArray.length * 2, desiredMinimumSize);
     }
     T pop()
     {
