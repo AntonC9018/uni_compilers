@@ -1,0 +1,4 @@
+R --> S
+S --> A | a L
+L --> S b | S L
+A --> i | n
