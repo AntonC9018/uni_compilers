@@ -82,7 +82,10 @@ void main(string[] args)
     auto tailTable = g.makeNoEpsilonOperationTable!(rhsIds => rhsIds[$ - 1]);
 
     foreach (p; g.productions)
+    {
         writeProduction(stdout.lockingTextWriter, g, p.lhsId, p.rhsIds);
+        writeln();
+    }
     headTable.writeTo(stdout.lockingTextWriter, g, "Head");
     tailTable.writeTo(stdout.lockingTextWriter, g, "Tail");
 
@@ -132,26 +135,30 @@ bool matchInput(in Grammar g, in PrecedenceTable precedenceTable, ref size_t[] i
     Stack!PrecedenceRelationKind precedenceStack;
     stack.push(eof);
 
-    writeln(padRight("Stack", ' ', 50), "  ", padRight("Input", ' ', 50));
+    writeln(padRight("Stack", ' ', 35), "     ", padRight("Input", ' ', 35));
     while (true)
     {
         auto fid = input.front;
 
+        void writeState(string precedenceRelationString)
         {
             auto i = input[].map!(i => g.getPrecedenceSymbolName(i)).joiner(" ");
             auto a = stack[].map!(s => getPrecedenceSymbolName(g, s));
             auto b = precedenceStack[].map!(k => getPrecedenceRelationString(k));
             auto s = a.take(1).chain(b.interlace(a.drop(1))).joiner(" ");
-            writeln(padRight(s, ' ', 50), "  ", padRight(i, ' ', 50));
+            writeln(padRight(s, ' ', 35), " ", precedenceRelationString, "   ", padRight(i, ' ', 35));
         }
 
         if (input.front == eof
             && stack[] == [eof, g.initialSymbolId])
         {
+            writeState(" ");
             return true;
         }
 
         PrecedenceRelationKind relationKind = precedenceTable[stack.top, fid];
+        writeState(getPrecedenceRelationString(relationKind));
+
         final switch (relationKind)
         {
             case PrecedenceRelationKind.Conflict:
