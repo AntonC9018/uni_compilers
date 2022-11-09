@@ -20,12 +20,6 @@ B \rightarrow a | b | dD \\\\
 D \rightarrow Ae \\\\
 \end{cases} $
 
-
-S
-AcB
-AcBcBcB
-dacbccB
-
 Să se construiască tabelul de analiză LL(1) şi să se analizeze şirul **dacbcbeca**.
 Să se deseneze arborele de derivare.
 
