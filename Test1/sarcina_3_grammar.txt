@@ -1,0 +1,7 @@
+M --> X_c A | X_a B
+A --> Y_1 A | X_a B | a
+B --> Y_2 B | X_a X_c | b
+X_a --> a
+X_c --> c
+Y_1 --> X_c A
+Y_2 --> X_a B

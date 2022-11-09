@@ -12,6 +12,7 @@
 	"configurations": [
 		{
 			"name": "ll1",
+			"targetName": "ll1",
 			"dependencies":
 			{
 				"mir-algorithm": "~>2.0.0"
@@ -22,6 +23,7 @@
 		},
 		{
 			"name": "precedence",
+			"targetName": "precedence",
 			"dependencies":
 			{
 				"mir-algorithm": "~>2.0.0"
@@ -32,6 +34,7 @@
 		},
 		{
 			"name": "cyk",
+			"targetName": "cyk",
 			"dependencies":
 			{
 				"pegged": "~>0.4.6",

@@ -203,7 +203,7 @@ $
 
 > 1. Se elimină recursia stângă.
 
-Avem 4 instanțe de recursie stângă pentru 4 reguli ai neterminalululi $ A_0 $: $ A_0 \rightarrow A_0 + A_1 | A_0 - A_1 | A_0 + | A_0 - $.
+Avem 4 instanțe de recursie stângă pentru 4 reguli ale neterminalululi $ A_0 $: $ A_0 \rightarrow A_0 + A_1 | A_0 - A_1 | A_0 + | A_0 - $.
 
 Ca să elimine recursia stângă, se adaugă o regulă $ X_0 \rightarrow + A_1 | + A_1 X_0 | - A_1 | - A_1 X_0 | + | + X_0 | - | - X_0 $, și se adaugă regulile modifice $ A $ la $ A_0 \rightarrow A_3 m X_0 | A_2 n X_0 | n X_0 | A_2 \* A_1 X_0 | A_2 / A_1 X_0 | \* A_1 X_0 | A_2 \* X_0 | /A_1 X_0 | A_2/ X_0 | m X_0 | + A_1 X_0| - A_1 X_0 | X_0 $ și se elimine toate regulile recursive.
 

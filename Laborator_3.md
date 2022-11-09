@@ -11,7 +11,7 @@ Varianta: *5*.
 
 Fie gramatica independentă de context
 
-$ G = (V_N, V_T, P, S), V_N = \\{S, A, B, D \\}, V_T = \\{a,b,c,d\\} \\
+$ G = (V_N, V_T, P, S), V_N = \\{S, A, B, D \\}, V_T = \\{a,b,c,d,e\\} \\
 \begin{cases}
 S \rightarrow A \\\\
 A \rightarrow B | AcB \\\\
