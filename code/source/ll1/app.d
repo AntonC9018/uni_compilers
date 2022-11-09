@@ -144,6 +144,14 @@ static struct SyntaxTree
 
         return nodes[parent].children;
     }
+
+    const(size_t)[] addEpsilonNode(size_t parent, size_t epsilonId)
+    {
+        nodes[parent].productionIndex = SpecialProduction.epsilon;
+        nodes[parent].children ~= nodes.length;
+        nodes ~= SyntaxNode(SpecialProduction.none, null, parent, epsilonId);
+        return nodes[parent].children;
+    }
 }
 
 SyntaxTree matchInput(in Grammar g, in LL1Table ll1, const(size_t)[] input)
@@ -170,15 +178,19 @@ SyntaxTree matchInput(in Grammar g, in LL1Table ll1, const(size_t)[] input)
     }
     // auto appliedRules = appender!(RuleApplication[]);
 
+    void writeParsingState()
+    {
+        import std.string;
+        auto i = input[].map!(i => g.getPrecedenceSymbolName(i)).joiner(" ");
+        auto s = stack[].map!(s => getPrecedenceSymbolName(g, s.symbolId)).joiner(" ");
+        writeln(padRight(s, ' ', 50), "  ", padRight(i, ' ', 50));
+    }
+
     writeln(padRight("Stack", ' ', 50), "  ", padRight("Input", ' ', 50));
     while (!input.empty)
     {
-        {
-            import std.string;
-            auto i = input[].map!(i => g.getPrecedenceSymbolName(i)).joiner(" ");
-            auto s = stack[].map!(s => getPrecedenceSymbolName(g, s.symbolId)).joiner(" ");
-            writeln(padRight(s, ' ', 50), "  ", padRight(i, ' ', 50));
-        }
+        writeParsingState();
+
         size_t token = input.front;
         auto top = stack.pop();
         if (top.symbolId == token)
@@ -205,6 +217,7 @@ SyntaxTree matchInput(in Grammar g, in LL1Table ll1, const(size_t)[] input)
             }
             case SpecialProduction.epsilon:
             {
+                syntaxTree.addEpsilonNode(top.nodeId, g.epsilonId);
                 break;
             }
             default:
@@ -222,10 +235,21 @@ SyntaxTree matchInput(in Grammar g, in LL1Table ll1, const(size_t)[] input)
         // appliedRules ~= RuleApplication(top.symbolId, productionIndex);
     }
 
-    if (!stack.empty)
+    // Apply final epsilon rules.
+    while (!stack.empty)
     {
-        writeln("Stack not empty, unmatched.");
-        return syntaxTree;
+        writeParsingState();
+
+        auto top = stack.pop();
+        auto productions = g.symbols[top.symbolId].productions;
+        auto epsilonRuleIndex = productions.countUntil!(p => p.rhsIds == [g.epsilonId]);
+        if (epsilonRuleIndex == -1)
+        {
+            writeln("Final stack does not collapse, didn't match.");
+            return syntaxTree;
+        }
+
+        syntaxTree.addEpsilonNode(top.nodeId, g.epsilonId);
     }
 
     return syntaxTree;

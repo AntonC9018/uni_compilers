@@ -1,6 +1,13 @@
 // https://www.geeksforgeeks.org/construction-of-ll1-parsing-table/
-E  --> T E'
-E' --> + T E' | eps                
-T  --> F T'
-T' --> * F T' | eps
-F  --> id | ( E )
+// E  --> T E'
+// E' --> + T E' | eps                
+// T  --> F T'
+// T' --> * F T' | eps
+// F  --> id | ( E )
+S --> X_3
+B --> a | b | d D
+D --> X_3 e
+A --> X_2 | eps
+X_2 --> c B X_1
+X_1 --> X_2 | eps
+X_3 --> B A
