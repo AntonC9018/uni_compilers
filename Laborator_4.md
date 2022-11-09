@@ -11,8 +11,9 @@ Varianta: *5*.
 
 Fie gramatica independentă de context 
 
-$ G = (V_N, V_T, P, S), V_N = \\{S, A, B, D \\}, V_T = \\{a,b,c,d\\} \\
-P = \begin{cases}
+$ G = (V_N, V_T, P, S), V_N = \\{S, A, B, D \\}, V_T = \\{a,b,c,d\\} $
+
+$ P = \begin{cases}
 S \rightarrow A \\\\
 A \rightarrow B | AcB \\\\
 B \rightarrow a | b | dD \\\\
@@ -28,7 +29,7 @@ dacbccB
 Să se construiască tabelul de analiză LL(1) şi să se analizeze şirul **dacbcbeca**.
 Să se deseneze arborele de derivare.
 
-## Realizarea
+## Normalizarea
 
 Necesită să eliminăm recursia stângă.
 
@@ -64,7 +65,7 @@ Gramatica rezulantă este echivalentă cu gramatica primită după eliminarea re
 Trebuie să mai performăm factorizarea pentru $ A $ (ambele reguli se încep cu $ B $).
 Adaugăm o regulă $ X_3 \rightarrow B A $, adaugăm regulile $ A \rightarrow X_2 $, $ A \rightarrow \varepsilon $, ștergem regulile veche lui $ A $. Toate aparițiile lui $ A $ în alte reguli se înlocuiesc cu $ X_3 $.
 
-$ P ^ {\prime \prime} = \begin{cases}
+$ P ^ {\prime \prime \prime} = \begin{cases}
 S \rightarrow X_3 \\\\
 B \rightarrow a | b | d D \\\\
 D \rightarrow X_3 e \\\\
@@ -73,6 +74,9 @@ X_1 \rightarrow X_2 | \varepsilon \\\\
 A \rightarrow X_2 | \varepsilon \\\\
 X_3 \rightarrow B A \\\\
 \end{cases} $
+
+
+## Construirea tabelelor și analiza sintactică
 
 Rulez [programul meu](https://github.com/AntonC9018/uni_compilers/blob/3cf8f73df367aa337bed9513e3011a0b2da9dff2/code/source/ll1/app.d) la această gramatică:
 
