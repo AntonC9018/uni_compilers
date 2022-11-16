@@ -69,7 +69,14 @@ void main(string[] args)
                 write("A", index, "(\"", g.symbols[node.symbolId].name, "\")");
                 if (node.children.length > 0)
                 {
-                    write(" --> ");
+                    write(" --");
+                    if (node.productionIndex != SpecialProduction.none)
+                    {
+                        write(`"`);
+                        writeEpsilonProduction(g, node.symbolId, node.productionIndex);
+                        write(`"--`);
+                    }
+                    write("> ");
                     foreach (childIndex, childId; node.children)
                     {
                         write("A", childId);
@@ -90,10 +97,7 @@ void main(string[] args)
                         write(" matched production: ");
                         writeEpsilonProduction(g, node.symbolId, node.productionIndex);
                     }
-                    else
-                    {
-                        writeln();
-                    }
+                    writeln();
                     indentation ~= "  ";
                     foreach (size_t childIndex; node.children)
                         printTree(&syntaxTree.nodes[childIndex], indentation);
@@ -111,7 +115,7 @@ import sharedd.parsing;
 
 static struct SyntaxNode
 {
-    ssize_t productionIndex;
+    ssize_t productionIndex = SpecialProduction.none;
     size_t[] children;
     ssize_t parent;
     size_t symbolId;
@@ -145,9 +149,9 @@ static struct SyntaxTree
         return nodes[parent].children;
     }
 
-    const(size_t)[] addEpsilonNode(size_t parent, size_t epsilonId)
+    const(size_t)[] addEpsilonNode(size_t parent, size_t epsilonId, ssize_t epsilonRuleIndex = SpecialProduction.epsilon)
     {
-        nodes[parent].productionIndex = SpecialProduction.epsilon;
+        nodes[parent].productionIndex = epsilonRuleIndex;
         nodes[parent].children ~= nodes.length;
         nodes ~= SyntaxNode(SpecialProduction.none, null, parent, epsilonId);
         return nodes[parent].children;
@@ -187,7 +191,7 @@ SyntaxTree matchInput(in Grammar g, in LL1Table ll1, const(size_t)[] input)
     }
 
     writeln(padRight("Stack", ' ', 50), "  ", padRight("Input", ' ', 50));
-    while (!input.empty)
+    OuterLoop: while (!input.empty)
     {
         writeParsingState();
 
@@ -218,6 +222,11 @@ SyntaxTree matchInput(in Grammar g, in LL1Table ll1, const(size_t)[] input)
             case SpecialProduction.epsilon:
             {
                 syntaxTree.addEpsilonNode(top.nodeId, g.epsilonId);
+                if (stack.empty)
+                {
+                    writeln("Input didn't match fully.");
+                    return syntaxTree;
+                }
                 break;
             }
             default:
@@ -249,7 +258,7 @@ SyntaxTree matchInput(in Grammar g, in LL1Table ll1, const(size_t)[] input)
             return syntaxTree;
         }
 
-        syntaxTree.addEpsilonNode(top.nodeId, g.epsilonId);
+        syntaxTree.addEpsilonNode(top.nodeId, g.epsilonId, epsilonRuleIndex);
     }
 
     return syntaxTree;
@@ -496,7 +505,9 @@ auto buildLL1Table(TWriter)(
 
             import std.format;
             writeEpsilonProduction(g, lhsId, productionIndex, errorHandler);
+            writeln();
             writeEpsilonProduction(g, lhsId, *indexInTable, errorHandler);
+            writeln();
             isError = true;
         }
     }
@@ -608,5 +619,4 @@ void writeEpsilonProduction(TWriter)(
         const(size_t)[] rhsIds = productions[productionIndex].rhsIds;
         writeProduction(w, g, lhsId, rhsIds);
     }
-    w.put("\n");
 }
