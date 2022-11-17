@@ -70,7 +70,8 @@ void main(string[] args)
                 if (node.children.length > 0)
                 {
                     write(" --");
-                    if (node.productionIndex != SpecialProduction.none)
+                    if (false
+                        && node.productionIndex != SpecialProduction.none)
                     {
                         write(`"`);
                         writeEpsilonProduction(g, node.symbolId, node.productionIndex);
