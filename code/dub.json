@@ -11,6 +11,17 @@
 	"targetType": "executable",
 	"configurations": [
 		{
+			"name": "code_gen",
+			"targetName": "code_gen",
+			"dependencies":
+			{
+				"acd-arithmetic": "~>0.0.4"
+			},
+			"sourcePaths": [
+				"source/code_gen"
+			]
+		},
+		{
 			"name": "ll1",
 			"targetName": "ll1",
 			"dependencies":
