@@ -1,4 +1,4 @@
-# Laborator 1 la Teoria Compilării și Semantica Limbajelor de Programare
+# Laborator 4 la Teoria Compilării și Semantica Limbajelor de Programare
 
 Tema: *LL(1)*.
 

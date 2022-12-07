@@ -1,4 +1,4 @@
-# Laborator 1 la Teoria Compilării și Semantica Limbajelor de Programare
+# Laborator 2 la Teoria Compilării și Semantica Limbajelor de Programare
 
 Tema: *Algoritmul Cocke-Younger-Kasami*.
 

@@ -1,4 +1,4 @@
-# Laborator 1 la Teoria Compilării și Semantica Limbajelor de Programare
+# Laborator 3 la Teoria Compilării și Semantica Limbajelor de Programare
 
 Tema: *Gramatici simple de precedență. Parser shift-reduce*.
 
