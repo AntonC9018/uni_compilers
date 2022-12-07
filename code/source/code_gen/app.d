@@ -112,7 +112,7 @@ class MermadDiagramSyntaxWalker : SyntaxWalker
     override void visit(OperatorNode* node)
     {
         size_t id = getId(node.asSyntaxNode);
-        write("A", id, "(\"", node.operator.name, "\") --> ");
+        write("A", id, " --> ");
         foreach (i; 0 .. node.operands.length)
         {
             size_t operandId = getId(node.operands[i]);
@@ -128,10 +128,11 @@ class MermadDiagramSyntaxWalker : SyntaxWalker
     {
         size_t id = getId(node);
         string value = getNodeText(node);
-        if (value == "")
-            return super.visit(node);
 
-        writef!`A%s("%s (A%s)")`(id, value, id);
+        if (value != "")
+            writefln!`A%s("%s (A%s)")`(id, value, id);
+
+        return super.visit(node);
     }
 }
 
@@ -192,11 +193,6 @@ Instruction instruction(Operator* op, size_t lhs, SyntaxNode* value)
     return Instruction(op, lhs, typeof(Instruction.rhs)(value));
 }
 
-Instruction instruction(Operator* op, size_t lhs, typeof(Instruction.rhs) rhs)
-{
-    return Instruction(op, lhs, rhs);
-}
-
 Instruction mov(size_t lhs, size_t rhs)
 {
     return Instruction(null, lhs, typeof(Instruction.rhs)(rhs));
@@ -205,11 +201,6 @@ Instruction mov(size_t lhs, size_t rhs)
 Instruction mov(size_t lhs, SyntaxNode* value)
 {
     return Instruction(null, lhs, typeof(Instruction.rhs)(value));
-}
-
-Instruction mov(size_t lhs, typeof(Instruction.rhs) value)
-{
-    return Instruction(null, lhs, value);
 }
 
 void writeCode(scope Instruction[] instructions, size_t maxRegister)
@@ -300,23 +291,30 @@ class CodeGenerationSyntaxWalker : SyntaxWalker
 
         void doWithMemory(size_t computedFirstIndex)
         {
+            assert(computedFirstIndex == 0, "The other case is never used.");
+
             super.visit(node.operands[computedFirstIndex]);
-            size_t memoryId = currentMemory;
-            output ~= mov(memoryId, currentRegister);
+            output ~= mov(currentMemory, currentRegister);
             currentMemory++;
             
             super.visit(node.operands[1 - computedFirstIndex]);
 
-            // If the right one was done first, we have to swap the order of operands.
-            if (computedFirstIndex == 1)
+            // If the left one was done first, the output will be computed into the memory,
+            // and then copied into the register.
+            // NOTE: I think hardware usually prohibits subtracting from memory directly,
+            //       but has an instruction for swapping memory with a register, so that could be used instead.
+            // if (computedFirstIndex == 1)
+            // {
+            //     output ~= instruction(node.operator, currentMemory, currentRegister);
+            //     output ~= mov(currentRegister, currentMemory);
+            // }
+
+            // The left output is in the register, so just do the operation with the memory as the rhs.
+            // else
             {
-                output ~= instruction(node.operator, memoryId, currentRegister);
-                output ~= mov(currentRegister, memoryId);
+                output ~= instruction(node.operator, currentRegister, currentMemory);
             }
-            else
-            {
-                output ~= instruction(node.operator, currentRegister, memoryId);
-            }
+            currentMemory--;
         }
 
         void doWithRegisters(size_t computedFirstIndex)
@@ -330,12 +328,14 @@ class CodeGenerationSyntaxWalker : SyntaxWalker
             super.visit(node.operands[computedSecondIndex]);
             currentRegister--;
 
-            // If the largest is the right one, we have to swap the register order
+            // If the right one was done first, then we have to swap the registers at the end,
+            // and perform the operation with them swapped too.
             if (computedFirstIndex == 1)
             {
                 output ~= instruction(node.operator, currentRegister + 1, currentRegister);
                 output ~= mov(currentRegister, currentRegister + 1);
             }
+            // If the left one was done first, the output will be computed into the first register.
             else
             {
                 output ~= instruction(node.operator, currentRegister, currentRegister + 1);
