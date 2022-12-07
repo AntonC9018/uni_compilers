@@ -58,13 +58,12 @@ void main(string[] args)
         }
     }
 
-    size_t maxRegisters = 2;
-    auto codeGenerator = new CodeGenerationSyntaxWalker(lattributeWalker.ls, maxRegisters);
+    auto codeGenerator = new CodeGenerationSyntaxWalker(lattributeWalker.ls, numRegisters);
     codeGenerator.walk(expressionTree.root);
     auto instructions = codeGenerator.output[];
 
     writeln("Code:");
-    writeCode(instructions, maxRegisters);
+    writeCode(instructions, numRegisters);
 }
 
 struct IdMap(T)
