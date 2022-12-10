@@ -94,6 +94,8 @@ string getNodeText(SyntaxNode* node)
         case SyntaxNodeKind.integerLiteral:
         case SyntaxNodeKind.floatLiteral:
             return (cast(LiteralNode*) node).token.text;
+        case SyntaxNodeKind.operator:
+            return (cast(OperatorNode*) node).operator.name;
         default:
             return "";
     }
