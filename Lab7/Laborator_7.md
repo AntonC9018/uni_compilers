@@ -47,8 +47,8 @@ $ l_{A0} = max(2, 1) = 2 $
 ## Generarea codului
 
 1. Se evaluează arborele cel mai lung primul (adică nodul are valoare $ l $ mai mare), iar rezultatul este mișcat în primul registru care este valabil;
-2. Dacă $ l $ sunt egale, se calculează arborele din stânga, după ce acel din dreapta (deoarece operatorii ca $ - $ sunt evaluate în așa ordine).
-3. Dacă numărul necesar de registre este mai mare decât numărul de registre disponibil, rezultatul obținut după calculul valorii unui din arbore se pune în memorie. Numărul de registre necesar este egal cu valoarea lui $ l $.
+2. Dacă $ l $ sunt egale, se calculează arborele din stânga, după ce acel din dreapta (deoarece operatorii necomutativi ca $ - $ sunt evaluați în așa ordine).
+3. Dacă numărul necesar de regiștri este mai mare decât numărul de regiștri disponibil, rezultatul obținut după calculul valorii primilui arbore se pune în memorie. Numărul de regiștri necesar este egal cu valoarea lui $ l $.
 4. Dacă valoarea lui $ l $ a unuia din copii este $ 0 $, atunci operația se realizează fără a-l pune în registru sau în memorie. 
 
 ```
