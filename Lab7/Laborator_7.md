@@ -156,3 +156,15 @@ result ==
 
     add R1, R2
 ```
+
+```mermaid
+flowchart LR
+A0("gencod(A0, 1)") --> A1("gencod(A1, 1)") & A2("gencod(A2, 1)") & B1("add R1, R2")
+A1 --> A3("gencod(A3, 1)") & A4("gencod(A4, 2)") & B2("sub R1, R2")
+A3 --> B0("mov R1, A3")
+A4 --> A5("gencod(A5, 2)") & A6("mul R2, A6")
+A5 --> B3("mov R2, A5")
+A2 --> A8("gencod(A8, 2)") & B4("mul R2, A9")
+A8 --> A10("gencod(A10, 2)") & B5("mul R2, A11")
+A10 --> B6("mov R2, A10")
+```

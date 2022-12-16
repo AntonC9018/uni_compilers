@@ -296,9 +296,10 @@ class CodeGenerationSyntaxWalker : SyntaxWalker
 
             super.visit(node.operands[computedFirstIndex]);
             output ~= mov(currentMemory, currentRegister);
+
             currentMemory++;
-            
             super.visit(node.operands[1 - computedFirstIndex]);
+            currentMemory--;
 
             // If the left one was done first, the output will be computed into the memory,
             // and then copied into the register.
@@ -315,7 +316,6 @@ class CodeGenerationSyntaxWalker : SyntaxWalker
             {
                 output ~= instruction(node.operator, currentRegister, currentMemory);
             }
-            currentMemory--;
         }
 
         void doWithRegisters(size_t computedFirstIndex)
