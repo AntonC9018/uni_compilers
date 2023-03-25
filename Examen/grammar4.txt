@@ -1,0 +1,9 @@
+M --> F a X_3 
+X_3 --> d B | eps
+B --> D a f 
+D --> X_4 X_2 
+X_4 --> c | e c 
+X_2 --> eps | D X_2 
+F --> X_5 X_1 
+X_5 --> b | e b 
+X_1 --> eps | F X_1 

@@ -1,0 +1,13 @@
+L --> Y_1 D | i  
+Y_1 --> Y_2 X_i  
+Y_2 --> M X_a  
+D --> Y_3 X_c  
+Y_3 --> X_b M  
+M --> Y_4 X_v | c  
+Y_4 --> M X_d  
+X_a --> a  
+X_b --> b  
+X_c --> c  
+X_d --> d  
+X_i --> i  
+X_v --> v  
